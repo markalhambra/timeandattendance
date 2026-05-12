@@ -1,0 +1,73 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * { box-sizing: border-box; }
+  body {
+    @apply font-sans text-black bg-white antialiased;
+    -webkit-tap-highlight-color: transparent;
+  }
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { @apply bg-gray-100; }
+  ::-webkit-scrollbar-thumb { @apply bg-gray-400 rounded; }
+  ::-webkit-scrollbar-thumb:hover { @apply bg-gray-600; }
+}
+
+@layer components {
+  .card {
+    @apply bg-white border border-gray-200 rounded-xl shadow-card;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-primary {
+    @apply btn bg-black text-white hover:bg-gray-800 active:bg-gray-900;
+  }
+  .btn-secondary {
+    @apply btn bg-white text-black border border-gray-300 hover:bg-gray-50 active:bg-gray-100;
+  }
+  .btn-ghost {
+    @apply btn bg-transparent text-gray-700 hover:bg-gray-100;
+  }
+  .btn-danger {
+    @apply btn bg-red-600 text-white hover:bg-red-700;
+  }
+  .input {
+    @apply w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent transition-all;
+  }
+  .label {
+    @apply block text-xs font-semibold text-gray-600 mb-1 uppercase tracking-wide;
+  }
+  .badge {
+    @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold;
+  }
+  .badge-onsite  { @apply badge bg-black text-white; }
+  .badge-wfh     { @apply badge bg-gray-700 text-white; }
+  .badge-ob      { @apply badge bg-gray-400 text-white; }
+  .badge-absent  { @apply badge bg-red-100 text-red-700; }
+  .badge-pending { @apply badge bg-yellow-100 text-yellow-800; }
+  .badge-approved{ @apply badge bg-green-100 text-green-800; }
+  .badge-rejected{ @apply badge bg-red-100 text-red-700; }
+  .table-header {
+    @apply text-left text-xs font-bold text-gray-500 uppercase tracking-wider px-4 py-3;
+  }
+  .table-cell {
+    @apply px-4 py-3 text-sm text-gray-900;
+  }
+  .sidebar-item {
+    @apply flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 cursor-pointer;
+  }
+  .sidebar-item-active {
+    @apply sidebar-item bg-black text-white;
+  }
+  .sidebar-item-inactive {
+    @apply sidebar-item text-gray-700 hover:bg-gray-100;
+  }
+  .stat-card {
+    @apply card p-5 flex flex-col gap-2;
+  }
+}
+
+/* Leaflet map tweaks */
+.leaflet-container { font-family: inherit; border-radius: 12px; }

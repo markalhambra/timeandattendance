@@ -1,0 +1,473 @@
+import { Response } from 'express';
+import { AuthRequest } from '../middleware/auth.middleware';
+import { prisma } from '../config/database';
+import { AttendanceStatus, ApprovalStatus } from '@prisma/client';
+import { notificationService } from '../services/notification.service';
+
+const OFFICE_LAT = parseFloat(process.env.OFFICE_LAT || '14.5995');
+const OFFICE_LNG = parseFloat(process.env.OFFICE_LNG || '120.9842');
+const OFFICE_RADIUS = parseFloat(process.env.OFFICE_RADIUS_METERS || '200');
+const OVERTIME_THRESHOLD_MINUTES = 9 * 60; // 9 hours
+
+function haversineDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371000; // meters
+  const φ1 = (lat1 * Math.PI) / 180;
+  const φ2 = (lat2 * Math.PI) / 180;
+  const Δφ = ((lat2 - lat1) * Math.PI) / 180;
+  const Δλ = ((lng2 - lng1) * Math.PI) / 180;
+  const a = Math.sin(Δφ / 2) ** 2 + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function getDeviceInfo(userAgent: string): string {
+  return userAgent.substring(0, 200);
+}
+
+export async function clockIn(req: AuthRequest, res: Response): Promise<void> {
+  const { latitude, longitude, accuracy, status } = req.body;
+  const employeeId = req.user!.employeeId;
+
+  if (!employeeId) { res.status(400).json({ success: false, message: 'Employee profile not found.' }); return; }
+  if (!latitude || !longitude) { res.status(400).json({ success: false, message: 'Location is required.' }); return; }
+
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const existing = await prisma.attendanceRecord.findUnique({
+      where: { employeeId_date: { employeeId, date: today } },
+    });
+
+    if (existing?.clockIn) {
+      res.status(400).json({ success: false, message: 'Already clocked in today.' });
+      return;
+    }
+
+    const distance = haversineDistance(latitude, longitude, OFFICE_LAT, OFFICE_LNG);
+    const isOnsite = distance <= OFFICE_RADIUS;
+
+    let attendanceStatus: AttendanceStatus;
+    if (isOnsite) {
+      attendanceStatus = AttendanceStatus.ON_SITE;
+    } else if (status && ['WFH', 'OB', 'ON_SITE'].includes(status)) {
+      attendanceStatus = status as AttendanceStatus;
+    } else {
+      // Must select status when outside radius
+      res.status(400).json({
+        success: false,
+        message: 'You are outside office radius. Please select attendance type.',
+        data: { distance: Math.round(distance), isOnsite: false },
+      });
+      return;
+    }
+
+    const now = new Date();
+    const record = existing
+      ? await prisma.attendanceRecord.update({
+          where: { id: existing.id },
+          data: {
+            clockIn: now,
+            clockInLat: latitude,
+            clockInLng: longitude,
+            clockInAccuracy: accuracy,
+            clockInDevice: getDeviceInfo(req.headers['user-agent'] || ''),
+            status: attendanceStatus,
+          },
+        })
+      : await prisma.attendanceRecord.create({
+          data: {
+            employeeId,
+            date: today,
+            clockIn: now,
+            clockInLat: latitude,
+            clockInLng: longitude,
+            clockInAccuracy: accuracy,
+            clockInDevice: getDeviceInfo(req.headers['user-agent'] || ''),
+            status: attendanceStatus,
+          },
+        });
+
+    await prisma.auditLog.create({
+      data: {
+        userId: req.user!.sub,
+        action: 'CLOCK_IN',
+        entity: 'AttendanceRecord',
+        entityId: record.id,
+        newValues: { lat: latitude, lng: longitude, status: attendanceStatus },
+        ipAddress: req.ip,
+        latitude,
+        longitude,
+      },
+    });
+
+    res.json({
+      success: true,
+      message: 'Clock-in recorded successfully.',
+      data: { ...record, distance: Math.round(distance), isOnsite },
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Clock-in failed.' });
+  }
+}
+
+export async function clockOut(req: AuthRequest, res: Response): Promise<void> {
+  const { latitude, longitude, accuracy } = req.body;
+  const employeeId = req.user!.employeeId;
+
+  if (!employeeId) { res.status(400).json({ success: false, message: 'Employee profile not found.' }); return; }
+  if (!latitude || !longitude) { res.status(400).json({ success: false, message: 'Location is required.' }); return; }
+
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const record = await prisma.attendanceRecord.findUnique({
+      where: { employeeId_date: { employeeId, date: today } },
+    });
+
+    if (!record?.clockIn) { res.status(400).json({ success: false, message: 'No clock-in found for today.' }); return; }
+    if (record.clockOut) { res.status(400).json({ success: false, message: 'Already clocked out today.' }); return; }
+
+    const now = new Date();
+    const workingMinutes = Math.floor((now.getTime() - record.clockIn.getTime()) / 60000);
+    const overtimeMinutes = Math.max(0, workingMinutes - OVERTIME_THRESHOLD_MINUTES);
+
+    const updated = await prisma.attendanceRecord.update({
+      where: { id: record.id },
+      data: {
+        clockOut: now,
+        clockOutLat: latitude,
+        clockOutLng: longitude,
+        clockOutAccuracy: accuracy,
+        clockOutDevice: getDeviceInfo(req.headers['user-agent'] || ''),
+        workingMinutes,
+        overtimeMinutes,
+      },
+    });
+
+    // Auto-generate overtime record if applicable
+    if (overtimeMinutes > 0) {
+      const pendingExpiry = new Date();
+      pendingExpiry.setMonth(pendingExpiry.getMonth() + 3);
+      await prisma.overtimeRecord.create({
+        data: {
+          employeeId,
+          attendanceId: record.id,
+          date: today,
+          startTime: record.clockIn,
+          endTime: now,
+          minutes: overtimeMinutes,
+          reason: 'Auto-generated from attendance',
+          pendingExpiry,
+        },
+      });
+    }
+
+    await prisma.auditLog.create({
+      data: {
+        userId: req.user!.sub,
+        action: 'CLOCK_OUT',
+        entity: 'AttendanceRecord',
+        entityId: record.id,
+        newValues: { lat: latitude, lng: longitude, workingMinutes, overtimeMinutes },
+        ipAddress: req.ip,
+        latitude,
+        longitude,
+      },
+    });
+
+    res.json({
+      success: true,
+      message: 'Clock-out recorded successfully.',
+      data: { ...updated, overtimeMinutes },
+    });
+  } catch {
+    res.status(500).json({ success: false, message: 'Clock-out failed.' });
+  }
+}
+
+export async function getTodayAttendance(req: AuthRequest, res: Response): Promise<void> {
+  const employeeId = req.user!.employeeId;
+  if (!employeeId) { res.status(400).json({ success: false, message: 'Employee not found.' }); return; }
+
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const record = await prisma.attendanceRecord.findUnique({
+      where: { employeeId_date: { employeeId, date: today } },
+    });
+    res.json({ success: true, data: record });
+  } catch {
+    res.status(500).json({ success: false, message: 'Failed to fetch attendance.' });
+  }
+}
+
+export async function getMyAttendance(req: AuthRequest, res: Response): Promise<void> {
+  const employeeId = req.user!.employeeId;
+  if (!employeeId) { res.status(400).json({ success: false, message: 'Employee not found.' }); return; }
+
+  const { startDate, endDate, page = '1', limit = '30' } = req.query as Record<string, string>;
+  const skip = (parseInt(page) - 1) * parseInt(limit);
+
+  try {
+    const where: any = { employeeId };
+    if (startDate) where.date = { gte: new Date(startDate) };
+    if (endDate) where.date = { ...where.date, lte: new Date(endDate) };
+
+    const [records, total] = await Promise.all([
+      prisma.attendanceRecord.findMany({ where, orderBy: { date: 'desc' }, skip, take: parseInt(limit) }),
+      prisma.attendanceRecord.count({ where }),
+    ]);
+
+    res.json({ success: true, data: records, meta: { total, page: parseInt(page), limit: parseInt(limit) } });
+  } catch {
+    res.status(500).json({ success: false, message: 'Failed to fetch attendance.' });
+  }
+}
+
+export async function getMonthlySummary(req: AuthRequest, res: Response): Promise<void> {
+  const employeeId = req.user!.employeeId;
+  if (!employeeId) { res.status(400).json({ success: false, message: 'Employee not found.' }); return; }
+
+  const { year, month } = req.query as Record<string, string>;
+  const y = parseInt(year || String(new Date().getFullYear()));
+  const m = parseInt(month || String(new Date().getMonth() + 1));
+
+  try {
+    const start = new Date(y, m - 1, 1);
+    const end = new Date(y, m, 0);
+
+    const records = await prisma.attendanceRecord.findMany({
+      where: { employeeId, date: { gte: start, lte: end } },
+      orderBy: { date: 'asc' },
+    });
+
+    const summary = {
+      totalDays: records.length,
+      onsite: records.filter((r) => r.status === 'ON_SITE').length,
+      wfh: records.filter((r) => r.status === 'WFH').length,
+      ob: records.filter((r) => r.status === 'OB').length,
+      totalWorkingMinutes: records.reduce((s, r) => s + r.workingMinutes, 0),
+      totalOvertimeMinutes: records.reduce((s, r) => s + r.overtimeMinutes, 0),
+    };
+
+    res.json({ success: true, data: { records, summary } });
+  } catch {
+    res.status(500).json({ success: false, message: 'Failed to fetch summary.' });
+  }
+}
+
+export async function requestCorrection(req: AuthRequest, res: Response): Promise<void> {
+  const { attendanceId, requestedClockIn, requestedClockOut, reason } = req.body;
+  const employeeId = req.user!.employeeId;
+  if (!employeeId) { res.status(400).json({ success: false, message: 'Employee not found.' }); return; }
+
+  try {
+    const attendance = await prisma.attendanceRecord.findFirst({
+      where: { id: attendanceId, employeeId },
+    });
+    if (!attendance) { res.status(404).json({ success: false, message: 'Attendance record not found.' }); return; }
+
+    const correction = await prisma.attendanceCorrection.create({
+      data: {
+        employeeId,
+        attendanceId,
+        originalClockIn: attendance.clockIn,
+        originalClockOut: attendance.clockOut,
+        requestedClockIn: requestedClockIn ? new Date(requestedClockIn) : undefined,
+        requestedClockOut: requestedClockOut ? new Date(requestedClockOut) : undefined,
+        reason,
+      },
+    });
+
+    await notificationService.notifyDeptHead(employeeId, 'ATTENDANCE_CORRECTION', {
+      correctionId: correction.id,
+      message: 'New attendance correction request.',
+    });
+
+    res.status(201).json({ success: true, data: correction });
+  } catch {
+    res.status(500).json({ success: false, message: 'Failed to submit correction.' });
+  }
+}
+
+export async function getMyCorrections(req: AuthRequest, res: Response): Promise<void> {
+  const employeeId = req.user!.employeeId;
+  if (!employeeId) { res.status(400).json({ success: false, message: 'Employee not found.' }); return; }
+
+  try {
+    const corrections = await prisma.attendanceCorrection.findMany({
+      where: { employeeId },
+      include: { attendance: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    res.json({ success: true, data: corrections });
+  } catch {
+    res.status(500).json({ success: false, message: 'Failed to fetch corrections.' });
+  }
+}
+
+export async function getCorrections(req: AuthRequest, res: Response): Promise<void> {
+  const { status, departmentId, page = '1', limit = '20' } = req.query as Record<string, string>;
+  const skip = (parseInt(page) - 1) * parseInt(limit);
+
+  try {
+    const where: any = {};
+    if (status) where.status = status;
+
+    // Dept heads only see their department
+    if (req.user!.role === 'DEPARTMENT_HEAD') {
+      const dept = await prisma.department.findFirst({ where: { headId: req.user!.sub } });
+      if (dept) {
+        where.employee = { departmentId: dept.id };
+      }
+    } else if (departmentId) {
+      where.employee = { departmentId };
+    }
+
+    const [corrections, total] = await Promise.all([
+      prisma.attendanceCorrection.findMany({
+        where,
+        include: { employee: { include: { department: true } }, attendance: true },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: parseInt(limit),
+      }),
+      prisma.attendanceCorrection.count({ where }),
+    ]);
+
+    res.json({ success: true, data: corrections, meta: { total, page: parseInt(page), limit: parseInt(limit) } });
+  } catch {
+    res.status(500).json({ success: false, message: 'Failed to fetch corrections.' });
+  }
+}
+
+export async function reviewCorrection(req: AuthRequest, res: Response): Promise<void> {
+  const { id } = req.params;
+  const { status, notes } = req.body;
+
+  if (!['APPROVED', 'REJECTED'].includes(status)) {
+    res.status(400).json({ success: false, message: 'Invalid status.' });
+    return;
+  }
+
+  try {
+    const correction = await prisma.attendanceCorrection.findUnique({
+      where: { id },
+      include: { attendance: true, employee: true },
+    });
+    if (!correction) { res.status(404).json({ success: false, message: 'Correction not found.' }); return; }
+
+    const updated = await prisma.attendanceCorrection.update({
+      where: { id },
+      data: {
+        status: status as ApprovalStatus,
+        reviewedBy: req.user!.sub,
+        reviewedAt: new Date(),
+        reviewerNotes: notes,
+      },
+    });
+
+    // Apply correction if approved
+    if (status === 'APPROVED') {
+      const updateData: any = {};
+      if (correction.requestedClockIn) updateData.clockIn = correction.requestedClockIn;
+      if (correction.requestedClockOut) updateData.clockOut = correction.requestedClockOut;
+
+      if (updateData.clockIn && correction.attendance.clockOut) {
+        const workingMinutes = Math.floor(
+          (correction.attendance.clockOut.getTime() - updateData.clockIn.getTime()) / 60000,
+        );
+        updateData.workingMinutes = workingMinutes;
+        updateData.overtimeMinutes = Math.max(0, workingMinutes - OVERTIME_THRESHOLD_MINUTES);
+      }
+
+      await prisma.attendanceRecord.update({ where: { id: correction.attendanceId }, data: updateData });
+    }
+
+    await notificationService.notifyEmployee(correction.employeeId, 'APPROVAL_RESULT', {
+      type: 'Attendance Correction',
+      status,
+    });
+
+    res.json({ success: true, data: updated });
+  } catch {
+    res.status(500).json({ success: false, message: 'Failed to review correction.' });
+  }
+}
+
+export async function getAllAttendance(req: AuthRequest, res: Response): Promise<void> {
+  const { startDate, endDate, departmentId, employeeId, status, page = '1', limit = '50' } = req.query as Record<string, string>;
+  const skip = (parseInt(page) - 1) * parseInt(limit);
+
+  try {
+    const where: any = {};
+    if (status) where.status = status;
+    if (startDate || endDate) {
+      where.date = {};
+      if (startDate) where.date.gte = new Date(startDate);
+      if (endDate) where.date.lte = new Date(endDate);
+    }
+    if (employeeId) where.employeeId = employeeId;
+    if (req.user!.role === 'DEPARTMENT_HEAD') {
+      const dept = await prisma.department.findFirst({ where: { headId: req.user!.sub } });
+      if (dept) where.employee = { departmentId: dept.id };
+    } else if (departmentId) {
+      where.employee = { departmentId };
+    }
+
+    const [records, total] = await Promise.all([
+      prisma.attendanceRecord.findMany({
+        where,
+        include: { employee: { select: { firstName: true, lastName: true, employeeNumber: true, department: { select: { name: true } } } } },
+        orderBy: [{ date: 'desc' }, { clockIn: 'desc' }],
+        skip,
+        take: parseInt(limit),
+      }),
+      prisma.attendanceRecord.count({ where }),
+    ]);
+
+    res.json({ success: true, data: records, meta: { total, page: parseInt(page), limit: parseInt(limit) } });
+  } catch {
+    res.status(500).json({ success: false, message: 'Failed to fetch attendance records.' });
+  }
+}
+
+export async function getEmployeeAttendance(req: AuthRequest, res: Response): Promise<void> {
+  const { employeeId } = req.params;
+  const { startDate, endDate } = req.query as Record<string, string>;
+
+  try {
+    const where: any = { employeeId };
+    if (startDate || endDate) {
+      where.date = {};
+      if (startDate) where.date.gte = new Date(startDate);
+      if (endDate) where.date.lte = new Date(endDate);
+    }
+    const records = await prisma.attendanceRecord.findMany({ where, orderBy: { date: 'desc' } });
+    res.json({ success: true, data: records });
+  } catch {
+    res.status(500).json({ success: false, message: 'Failed to fetch attendance.' });
+  }
+}
+
+export async function getAbsentToday(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const employees = await prisma.employee.findMany({
+      where: { isActive: true },
+      select: {
+        id: true, firstName: true, lastName: true, employeeNumber: true,
+        department: { select: { name: true } },
+        attendanceRecords: { where: { date: today }, select: { id: true, clockIn: true } },
+      },
+    });
+
+    const absent = employees.filter((e) => e.attendanceRecords.length === 0);
+    res.json({ success: true, data: absent });
+  } catch {
+    res.status(500).json({ success: false, message: 'Failed to fetch absent employees.' });
+  }
+}

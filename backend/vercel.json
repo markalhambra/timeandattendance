@@ -1,0 +1,33 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "api/index.ts",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "/api/index.ts"
+    }
+  ],
+  "crons": [
+    {
+      "path": "/api/cron/absent-check",
+      "schedule": "0 6 * * 1-5"
+    },
+    {
+      "path": "/api/cron/expire-pending-overtime",
+      "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/expire-approved-overtime",
+      "schedule": "1 0 * * *"
+    },
+    {
+      "path": "/api/cron/expiration-alerts",
+      "schedule": "0 0 * * *"
+    }
+  ]
+}
