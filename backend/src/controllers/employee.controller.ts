@@ -1,7 +1,7 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth.middleware';
 import { prisma } from '../config/database';
-import { supabase, STORAGE_BUCKET } from '../config/supabase';
+import { getSupabaseClient, STORAGE_BUCKET } from '../config/supabase';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import path from 'path';
@@ -290,11 +290,12 @@ export async function uploadProfilePicture(req: AuthRequest, res: Response): Pro
   try {
     const ext = path.extname(req.file.originalname);
     const storagePath = `profiles/${uuidv4()}${ext}`;
-    const { error } = await supabase.storage
+    const sb = getSupabaseClient();
+    const { error } = await sb.storage
       .from(STORAGE_BUCKET)
       .upload(storagePath, req.file.buffer, { contentType: req.file.mimetype, upsert: true });
     if (error) throw error;
-    const { data: { publicUrl } } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(storagePath);
+    const { data: { publicUrl } } = sb.storage.from(STORAGE_BUCKET).getPublicUrl(storagePath);
     const employee = await prisma.employee.update({
       where: { id: req.params.id },
       data: { profilePicture: publicUrl },
@@ -311,11 +312,12 @@ export async function uploadDocument(req: AuthRequest, res: Response): Promise<v
   try {
     const ext = path.extname(req.file.originalname);
     const storagePath = `documents/${uuidv4()}${ext}`;
-    const { error } = await supabase.storage
+    const sb = getSupabaseClient();
+    const { error } = await sb.storage
       .from(STORAGE_BUCKET)
       .upload(storagePath, req.file.buffer, { contentType: req.file.mimetype });
     if (error) throw error;
-    const { data: { publicUrl } } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(storagePath);
+    const { data: { publicUrl } } = sb.storage.from(STORAGE_BUCKET).getPublicUrl(storagePath);
     const doc = await prisma.document.create({
       data: {
         employeeId: req.params.id,
@@ -349,7 +351,7 @@ export async function deleteDocument(req: AuthRequest, res: Response): Promise<v
   try {
     const doc = await prisma.document.findUnique({ where: { id: req.params.docId } });
     if (doc?.filename) {
-      await supabase.storage.from(STORAGE_BUCKET).remove([doc.filename]);
+      await getSupabaseClient().storage.from(STORAGE_BUCKET).remove([doc.filename]);
     }
     await prisma.document.delete({ where: { id: req.params.docId } });
     res.json({ success: true, message: 'Document deleted.' });
