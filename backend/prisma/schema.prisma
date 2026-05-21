@@ -133,7 +133,18 @@ model Employee {
   designation     String?
   dateHired       DateTime
   departmentId    String?
+  sssNumber              String?
+  pagibigNumber          String?
+  philhealthNumber       String?
+  tinNumber              String?
+  nickname               String?
+  gender                 String?
+  birthday               DateTime?
+  emergencyContact       String?
+  emergencyContactNumber String?
   isActive        Boolean   @default(true)
+  isArchived      Boolean   @default(false)
+  resignedAt      DateTime?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
@@ -285,6 +296,7 @@ model OvertimeRecord {
   endTime         DateTime
   minutes         Int
   reason          String?
+  isFiled         Boolean        @default(false)
   status          ApprovalStatus @default(PENDING)
   reviewedBy      String?
   reviewedAt      DateTime?

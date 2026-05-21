@@ -63,14 +63,25 @@ export const notificationService = {
         include: { department: { include: { head: true } } },
       });
 
+      const titles: Record<string, string> = {
+        LEAVE_REQUEST: 'New Leave Request',
+        OVERTIME_REQUEST: 'New Overtime Request',
+        ATTENDANCE_CORRECTION: 'New Attendance Correction',
+        CTO_REQUEST: 'New CTO Conversion Request',
+        CDO_REQUEST: 'New CDO Conversion Request',
+      };
+
       if (employee?.department?.head) {
-        const titles: Record<string, string> = {
-          LEAVE_REQUEST: 'New Leave Request',
-          OVERTIME_REQUEST: 'New Overtime Request',
-          ATTENDANCE_CORRECTION: 'New Attendance Correction',
-          CTO_REQUEST: 'New CTO Conversion Request',
-          CDO_REQUEST: 'New CDO Conversion Request',
-        };
+        // If the filer IS the department head, route to HR instead
+        if (employee.userId === employee.department.head.id) {
+          await this.notifyHR(
+            type,
+            titles[type] || 'New Request',
+            `${employee.firstName} ${employee.lastName} (Department Head) has submitted a new request.`,
+            data,
+          );
+          return;
+        }
 
         await this.createNotification(
           employee.department.head.id,

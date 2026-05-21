@@ -13,7 +13,7 @@ export default function ProfilePage() {
 
   const { data: profile } = useQuery<Employee>({
     queryKey: ['my-profile'],
-    queryFn: () => api.get('/employees/profile').then((r) => r.data.data),
+    queryFn: () => api.get('/employees/me').then((r) => r.data.data),
   });
 
   const changePasswordMutation = useMutation({
@@ -45,10 +45,10 @@ export default function ProfilePage() {
       {/* Avatar + name */}
       <div className="card p-6 flex items-center gap-4">
         <div className="w-16 h-16 rounded-full bg-black text-white flex items-center justify-center text-2xl font-black flex-shrink-0">
-          {profile?.user?.firstName?.[0]}{profile?.user?.lastName?.[0]}
+          {profile?.firstName?.[0]}{profile?.lastName?.[0]}
         </div>
         <div>
-          <div className="font-bold text-lg">{profile?.user?.firstName} {profile?.user?.lastName}</div>
+          <div className="font-bold text-lg">{profile?.firstName} {profile?.lastName}</div>
           <div className="text-sm text-gray-500">{profile?.user?.email}</div>
           <div className="text-xs text-gray-400 mt-0.5">{profile?.user?.role?.replace('_', ' ')}</div>
         </div>
@@ -66,14 +66,23 @@ export default function ProfilePage() {
       {activeTab === 'info' ? (
         <div className="card p-6">
           <InfoRow label="Employee No." value={profile?.employeeNumber} />
-          <InfoRow label="First Name" value={profile?.user?.firstName} />
-          <InfoRow label="Last Name" value={profile?.user?.lastName} />
+          <InfoRow label="First Name" value={profile?.firstName} />
+          <InfoRow label="Last Name" value={profile?.lastName} />
+          <InfoRow label="Nickname" value={profile?.nickname} />
+          <InfoRow label="Gender" value={profile?.gender} />
+          <InfoRow label="Birthday" value={profile?.birthday ? new Date(profile.birthday).toLocaleDateString('en-PH') : undefined} />
           <InfoRow label="Email" value={profile?.user?.email} />
           <InfoRow label="Department" value={profile?.department?.name} />
-          <InfoRow label="Position" value={profile?.position} />
+          <InfoRow label="Designation" value={profile?.designation} />
           <InfoRow label="Date Hired" value={profile?.dateHired ? new Date(profile.dateHired).toLocaleDateString('en-PH') : undefined} />
-          <InfoRow label="Contact No." value={profile?.contactNumber} />
+          <InfoRow label="Contact No." value={profile?.mobile} />
           <InfoRow label="Address" value={profile?.address} />
+          <InfoRow label="Emergency Contact" value={profile?.emergencyContact} />
+          <InfoRow label="Emergency Contact No." value={profile?.emergencyContactNumber} />
+          <InfoRow label="SSS" value={profile?.sssNumber} />
+          <InfoRow label="PhilHealth" value={profile?.philhealthNumber} />
+          <InfoRow label="Pag-IBIG (HDMF)" value={profile?.pagibigNumber} />
+          <InfoRow label="TIN" value={profile?.tinNumber} />
         </div>
       ) : (
         <div className="card p-6 space-y-4">

@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 200" fill="black">
+  <!-- Triangle -->
+  <polygon points="95,0 175,115 15,115"/>
+  <!-- Trapezoid -->
+  <polygon points="0,140 190,140 210,200 -20,200"/>
+  <!-- ALPAS wordmark -->
+  <text
+    x="240"
+    y="190"
+    font-family="'Arial Black', 'Helvetica Neue', Arial, sans-serif"
+    font-weight="900"
+    font-size="185"
+    letter-spacing="-4"
+    fill="black"
+  >ALPAS</text>
+</svg>

@@ -138,7 +138,7 @@ async function main() {
     // Seed leave balances for current year
     const currentYear = new Date().getFullYear();
     for (const lt of [LeaveType.SICK, LeaveType.VACATION, LeaveType.PML, LeaveType.SML]) {
-      const days = lt === LeaveType.VACATION ? 15 : lt === LeaveType.SICK ? 10 : 3;
+      const days = lt === LeaveType.VACATION ? 15 : lt === LeaveType.SICK ? 10 : lt === LeaveType.PML ? 7 : 3;
       const emp2 = await prisma.employee.findUnique({ where: { userId: u.id } });
       if (emp2) {
         await prisma.leaveBalance.upsert({

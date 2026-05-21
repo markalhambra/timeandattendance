@@ -193,10 +193,19 @@ export async function getTodayAttendance(req: AuthRequest, res: Response): Promi
   try {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const record = await prisma.attendanceRecord.findUnique({
-      where: { employeeId_date: { employeeId, date: today } },
-    });
-    res.json({ success: true, data: record });
+
+    const [record, missedClockOut] = await Promise.all([
+      prisma.attendanceRecord.findUnique({
+        where: { employeeId_date: { employeeId, date: today } },
+      }),
+      // Find the most recent open record from a previous day (forgot to clock out)
+      prisma.attendanceRecord.findFirst({
+        where: { employeeId, date: { lt: today }, clockIn: { not: null }, clockOut: null },
+        orderBy: { date: 'desc' },
+      }),
+    ]);
+
+    res.json({ success: true, data: record, missedClockOut: missedClockOut || null });
   } catch {
     res.status(500).json({ success: false, message: 'Failed to fetch attendance.' });
   }
@@ -318,9 +327,8 @@ export async function getCorrections(req: AuthRequest, res: Response): Promise<v
     // Dept heads only see their department
     if (req.user!.role === 'DEPARTMENT_HEAD') {
       const dept = await prisma.department.findFirst({ where: { headId: req.user!.sub } });
-      if (dept) {
-        where.employee = { departmentId: dept.id };
-      }
+      if (!dept) { res.json({ success: true, data: [], meta: { total: 0, page: parseInt(page), limit: parseInt(limit) } }); return; }
+      where.employee = { departmentId: dept.id };
     } else if (departmentId) {
       where.employee = { departmentId };
     }
@@ -357,6 +365,13 @@ export async function reviewCorrection(req: AuthRequest, res: Response): Promise
       include: { attendance: true, employee: true },
     });
     if (!correction) { res.status(404).json({ success: false, message: 'Correction not found.' }); return; }
+    // Ensure dept head only reviews their own department's corrections
+    if (req.user!.role === 'DEPARTMENT_HEAD') {
+      const dept = await prisma.department.findFirst({ where: { headId: req.user!.sub } });
+      if (!dept || correction.employee.departmentId !== dept.id) {
+        res.status(403).json({ success: false, message: 'You can only review corrections from your department.' }); return;
+      }
+    }
 
     const updated = await prisma.attendanceCorrection.update({
       where: { id },
@@ -374,21 +389,57 @@ export async function reviewCorrection(req: AuthRequest, res: Response): Promise
       if (correction.requestedClockIn) updateData.clockIn = correction.requestedClockIn;
       if (correction.requestedClockOut) updateData.clockOut = correction.requestedClockOut;
 
-      if (updateData.clockIn && correction.attendance.clockOut) {
+      // Use corrected values where provided, fall back to existing record values
+      const effectiveClockIn = updateData.clockIn ?? correction.attendance.clockIn;
+      const effectiveClockOut = updateData.clockOut ?? correction.attendance.clockOut;
+
+      if (effectiveClockIn && effectiveClockOut) {
         const workingMinutes = Math.floor(
-          (correction.attendance.clockOut.getTime() - updateData.clockIn.getTime()) / 60000,
+          (effectiveClockOut.getTime() - effectiveClockIn.getTime()) / 60000,
         );
         updateData.workingMinutes = workingMinutes;
         updateData.overtimeMinutes = Math.max(0, workingMinutes - OVERTIME_THRESHOLD_MINUTES);
       }
 
       await prisma.attendanceRecord.update({ where: { id: correction.attendanceId }, data: updateData });
+
+      // Sync OvertimeRecord — remove old entry and recreate with corrected hours
+      await prisma.overtimeRecord.deleteMany({ where: { attendanceId: correction.attendanceId } });
+
+      const newOvertimeMinutes = updateData.overtimeMinutes ?? 0;
+      if (newOvertimeMinutes > 0 && effectiveClockIn && effectiveClockOut) {
+        const pendingExpiry = new Date();
+        pendingExpiry.setMonth(pendingExpiry.getMonth() + 3);
+        await prisma.overtimeRecord.create({
+          data: {
+            employeeId: correction.employeeId,
+            attendanceId: correction.attendanceId,
+            date: correction.attendance.date,
+            startTime: effectiveClockIn,
+            endTime: effectiveClockOut,
+            minutes: newOvertimeMinutes,
+            reason: 'Updated via attendance correction',
+            pendingExpiry,
+          },
+        });
+      }
     }
 
     await notificationService.notifyEmployee(correction.employeeId, 'APPROVAL_RESULT', {
       type: 'Attendance Correction',
       status,
     });
+
+    prisma.auditLog.create({
+      data: {
+        userId: req.user!.sub,
+        action: status === 'APPROVED' ? 'APPROVE' : 'REJECT',
+        entity: 'AttendanceCorrection',
+        entityId: id,
+        ipAddress: req.ip,
+        userAgent: req.headers['user-agent'],
+      },
+    }).catch(() => {});
 
     res.json({ success: true, data: updated });
   } catch {

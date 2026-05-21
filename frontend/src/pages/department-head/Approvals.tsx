@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../services/api';
 import { LeaveRequest, OvertimeRecord, AttendanceCorrection, OvertimeConversion } from '../../types';
@@ -14,16 +14,38 @@ export default function ApprovalsPage() {
   const [tab, setTab] = useState<Tab>('leaves');
   const [modal, setModal] = useState<ReviewModalState | null>(null);
   const [notes, setNotes] = useState('');
+  const [showHistory, setShowHistory] = useState(false);
+
+  useEffect(() => { setShowHistory(false); }, [tab]);
 
   const invalidateAll = () => {
-    ['dept-leaves', 'dept-overtime', 'dept-corrections', 'dept-conversions'].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
+    ['dept-leaves', 'dept-overtime', 'dept-corrections', 'dept-conversions',
+     'dept-leaves-history', 'dept-overtime-all', 'dept-corrections-all'].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
     qc.invalidateQueries({ queryKey: ['depthead-dashboard'] });
   };
 
   const { data: leaves } = useQuery<LeaveRequest[]>({ queryKey: ['dept-leaves'], queryFn: () => api.get('/leave?status=PENDING').then((r) => r.data.data) });
   const { data: overtime } = useQuery<OvertimeRecord[]>({ queryKey: ['dept-overtime'], queryFn: () => api.get('/overtime?status=PENDING').then((r) => r.data.data) });
   const { data: corrections } = useQuery<AttendanceCorrection[]>({ queryKey: ['dept-corrections'], queryFn: () => api.get('/attendance/corrections?status=PENDING').then((r) => r.data.data) });
-  const { data: conversions } = useQuery<OvertimeConversion[]>({ queryKey: ['dept-conversions'], queryFn: () => api.get('/overtime/conversions?status=PENDING').then((r) => r.data.data) });
+  const { data: conversionsAll } = useQuery<OvertimeConversion[]>({ queryKey: ['dept-conversions'], queryFn: () => api.get('/overtime/conversions').then((r) => r.data.data) });
+  const conversions = (conversionsAll ?? []).filter((c) => c.status === 'PENDING');
+  const conversionsHistory = (conversionsAll ?? []).filter((c) => c.status !== 'PENDING');
+
+  // History queries
+  const { data: leavesHistory } = useQuery<LeaveRequest[]>({
+    queryKey: ['dept-leaves-history'],
+    queryFn: () => api.get('/leave?reviewed=true').then((r) => r.data.data),
+  });
+  const { data: overtimeAllData } = useQuery<OvertimeRecord[]>({
+    queryKey: ['dept-overtime-all'],
+    queryFn: () => api.get('/overtime').then((r) => r.data.data),
+  });
+  const overtimeHistory = (overtimeAllData ?? []).filter((o) => o.status !== 'PENDING');
+  const { data: correctionsAllData } = useQuery<AttendanceCorrection[]>({
+    queryKey: ['dept-corrections-all'],
+    queryFn: () => api.get('/attendance/corrections').then((r) => r.data.data),
+  });
+  const correctionsHistory = (correctionsAllData ?? []).filter((c) => c.status !== 'PENDING');
 
   const reviewMutation = useMutation({
     mutationFn: ({ type, id, action, notes }: { type: Tab; id: string; action: string; notes: string }) => {
@@ -78,82 +100,198 @@ export default function ApprovalsPage() {
       </div>
 
       {/* Content */}
-      {tab === 'leaves' && (
-        <div className="card overflow-hidden">
-          <table className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-100"><tr>{['Employee', 'Type', 'Start', 'End', 'Days', 'Reason', ''].map((h) => <th key={h} className="table-header">{h}</th>)}</tr></thead>
-            <tbody className="divide-y divide-gray-50">
-              {!leaves?.length ? <tr><td colSpan={7} className="text-center text-sm text-gray-400 py-10">No pending leaves</td></tr> : leaves.map((l) => (
-                <tr key={l.id} className="hover:bg-gray-50">
-                  <td className="table-cell font-medium">{l.employee?.user?.firstName} {l.employee?.user?.lastName}</td>
-                  <td className="table-cell">{leaveTypeLabel[l.leaveType] || l.leaveType}</td>
-                  <td className="table-cell">{format(parseISO(l.startDate), 'MMM d')}</td>
-                  <td className="table-cell">{format(parseISO(l.endDate), 'MMM d, yyyy')}</td>
-                  <td className="table-cell">{l.totalDays}</td>
-                  <td className="table-cell max-w-xs truncate text-gray-500 text-xs">{l.reason}</td>
-                  <td className="table-cell"><ActionButtons type="leaves" id={l.id} name={`${l.employee?.user?.firstName} ${l.employee?.user?.lastName}`} /></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      {tab === 'leaves' && (() => {
+        const allLeaves = [
+          ...(leaves ?? []),
+          ...(leavesHistory ?? []),
+        ];
+        return (
+          <div className="card overflow-hidden">
+            <div className="overflow-x-auto">
+            <table className="w-full min-w-[900px]">
+              <thead className="bg-gray-50 border-b border-gray-100">
+                <tr>{['Employee', 'Type', 'Start', 'End', 'Days', 'Reason', 'Status', 'Remarks', 'Reviewed On', ''].map((h) => <th key={h} className="table-header">{h}</th>)}</tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {!allLeaves.length ? (
+                  <tr><td colSpan={10} className="text-center text-sm text-gray-400 py-10">No leave records</td></tr>
+                ) : allLeaves.map((l) => (
+                  <tr key={l.id} className="hover:bg-gray-50">
+                    <td className="table-cell font-medium">{l.employee?.firstName} {l.employee?.lastName}</td>
+                    <td className="table-cell">{leaveTypeLabel[l.leaveType] || l.leaveType}</td>
+                    <td className="table-cell">{format(parseISO(l.startDate), 'MMM d')}</td>
+                    <td className="table-cell">{format(parseISO(l.endDate), 'MMM d, yyyy')}</td>
+                    <td className="table-cell">{l.totalDays}</td>
+                    <td className="table-cell max-w-xs truncate text-gray-500 text-xs">{l.reason}</td>
+                    <td className="table-cell">
+                      {l.status === 'PENDING'
+                        ? <span className="badge bg-yellow-50 text-yellow-700">PENDING</span>
+                        : <span className={`badge ${l.status === 'APPROVED' ? 'badge-approved' : 'badge-rejected'}`}>{l.status}</span>}
+                    </td>
+                    <td className="table-cell max-w-xs truncate text-gray-500 text-xs">{l.deptHeadNotes || '—'}</td>
+                    <td className="table-cell text-gray-400 text-xs">{l.deptHeadAt ? format(parseISO(l.deptHeadAt), 'MMM d, yyyy') : '—'}</td>
+                    <td className="table-cell">
+                      {l.status === 'PENDING' && <ActionButtons type="leaves" id={l.id} name={`${l.employee?.firstName} ${l.employee?.lastName}`} />}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>            </div>          </div>
+        );
+      })()}
 
-      {tab === 'overtime' && (
-        <div className="card overflow-hidden">
-          <table className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-100"><tr>{['Employee', 'Date', 'Hours', 'Expires', ''].map((h) => <th key={h} className="table-header">{h}</th>)}</tr></thead>
-            <tbody className="divide-y divide-gray-50">
-              {!overtime?.length ? <tr><td colSpan={5} className="text-center text-sm text-gray-400 py-10">No pending overtime</td></tr> : overtime.map((o) => (
-                <tr key={o.id} className="hover:bg-gray-50">
-                  <td className="table-cell font-medium">{(o as any).employee?.user?.firstName} {(o as any).employee?.user?.lastName}</td>
-                  <td className="table-cell">{format(parseISO(o.date), 'MMM d, yyyy')}</td>
-                  <td className="table-cell font-semibold">{(o.minutes / 60).toFixed(1)}h</td>
-                  <td className="table-cell text-gray-500 text-xs">{o.pendingExpiry ? format(parseISO(o.pendingExpiry), 'MMM d, yyyy') : '—'}</td>
-                  <td className="table-cell"><ActionButtons type="overtime" id={o.id} name={`${(o as any).employee?.user?.firstName} ${(o as any).employee?.user?.lastName}`} /></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      {tab === 'overtime' && (() => {
+        const allOvertime = [
+          ...(overtime ?? []),
+          ...overtimeHistory,
+        ];
+        return (
+          <div className="card overflow-hidden">
+            <div className="overflow-x-auto">
+            <table className="w-full min-w-[700px]">
+              <thead className="bg-gray-50 border-b border-gray-100">
+                <tr>{['Employee', 'Date', 'Hours', 'Reason', 'Status', 'Remarks', 'Reviewed On', ''].map((h) => <th key={h} className="table-header">{h}</th>)}</tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {!allOvertime.length ? (
+                  <tr><td colSpan={8} className="text-center text-sm text-gray-400 py-10">No overtime records</td></tr>
+                ) : allOvertime.map((o) => (
+                  <tr key={o.id} className="hover:bg-gray-50">
+                    <td className="table-cell font-medium">{(o as any).employee?.firstName} {(o as any).employee?.lastName}</td>
+                    <td className="table-cell">{format(parseISO(o.date), 'MMM d, yyyy')}</td>
+                    <td className="table-cell font-semibold">{(o.minutes / 60).toFixed(1)}h</td>
+                    <td className="table-cell max-w-xs truncate text-gray-500 text-xs">{o.reason || '—'}</td>
+                    <td className="table-cell">
+                      {o.status === 'PENDING'
+                        ? <span className="badge bg-yellow-50 text-yellow-700">PENDING</span>
+                        : <span className={`badge ${o.status === 'APPROVED' ? 'badge-approved' : 'badge-rejected'}`}>{o.status}</span>}
+                    </td>
+                    <td className="table-cell max-w-xs truncate text-gray-500 text-xs">{o.reviewerNotes || '—'}</td>
+                    <td className="table-cell text-gray-400 text-xs">{o.reviewedAt ? format(parseISO(o.reviewedAt), 'MMM d, yyyy') : '—'}</td>
+                    <td className="table-cell">
+                      {o.status === 'PENDING' && <ActionButtons type="overtime" id={o.id} name={`${(o as any).employee?.firstName} ${(o as any).employee?.lastName}`} />}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>            </div>          </div>
+        );
+      })()}
 
       {tab === 'corrections' && (
-        <div className="card overflow-hidden">
-          <table className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-100"><tr>{['Employee', 'Date', 'Req. In', 'Req. Out', 'Reason', ''].map((h) => <th key={h} className="table-header">{h}</th>)}</tr></thead>
-            <tbody className="divide-y divide-gray-50">
-              {!corrections?.length ? <tr><td colSpan={6} className="text-center text-sm text-gray-400 py-10">No pending corrections</td></tr> : corrections.map((c) => (
-                <tr key={c.id} className="hover:bg-gray-50">
-                  <td className="table-cell font-medium">{(c as any).employee?.user?.firstName} {(c as any).employee?.user?.lastName}</td>
-                  <td className="table-cell">{c.attendance?.date ? format(parseISO(c.attendance.date), 'MMM d, yyyy') : '—'}</td>
-                  <td className="table-cell">{c.requestedClockIn ? format(parseISO(c.requestedClockIn), 'hh:mm a') : '—'}</td>
-                  <td className="table-cell">{c.requestedClockOut ? format(parseISO(c.requestedClockOut), 'hh:mm a') : '—'}</td>
-                  <td className="table-cell max-w-xs truncate text-gray-500 text-xs">{(c as any).reason}</td>
-                  <td className="table-cell"><ActionButtons type="corrections" id={c.id} name={`${(c as any).employee?.user?.firstName} ${(c as any).employee?.user?.lastName}`} /></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="space-y-3">
+          <div className="card overflow-hidden">
+            <div className="overflow-x-auto">
+            <table className="w-full min-w-[600px]">
+              <thead className="bg-gray-50 border-b border-gray-100"><tr>{['Employee', 'Date', 'Req. In', 'Req. Out', 'Reason', ''].map((h) => <th key={h} className="table-header">{h}</th>)}</tr></thead>
+              <tbody className="divide-y divide-gray-50">
+                {!corrections?.length ? <tr><td colSpan={6} className="text-center text-sm text-gray-400 py-10">No pending corrections</td></tr> : corrections.map((c) => (
+                  <tr key={c.id} className="hover:bg-gray-50">
+                    <td className="table-cell font-medium">{(c as any).employee?.firstName} {(c as any).employee?.lastName}</td>
+                    <td className="table-cell">{c.attendance?.date ? format(parseISO(c.attendance.date), 'MMM d, yyyy') : '—'}</td>
+                    <td className="table-cell">{c.requestedClockIn ? format(parseISO(c.requestedClockIn), 'hh:mm a') : '—'}</td>
+                    <td className="table-cell">{c.requestedClockOut ? format(parseISO(c.requestedClockOut), 'hh:mm a') : '—'}</td>
+                    <td className="table-cell max-w-xs truncate text-gray-500 text-xs">{(c as any).reason}</td>
+                    <td className="table-cell"><ActionButtons type="corrections" id={c.id} name={`${(c as any).employee?.firstName} ${(c as any).employee?.lastName}`} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>            </div>          </div>
+          <div>
+            <button onClick={() => setShowHistory((h) => !h)} className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-800 font-medium py-1">
+              <span>{showHistory ? '▲' : '▼'}</span>
+              {showHistory ? 'Hide' : 'Show'} Review History ({correctionsHistory.length})
+            </button>
+            {showHistory && (
+              <div className="card overflow-hidden mt-2">
+                <div className="overflow-x-auto">
+                <table className="w-full min-w-[650px]">
+                  <thead className="bg-gray-50 border-b border-gray-100">
+                    <tr>{['Employee', 'Date', 'Req. In', 'Req. Out', 'Decision', 'Remarks', 'Reviewed On'].map((h) => <th key={h} className="table-header">{h}</th>)}</tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {!correctionsHistory.length ? (
+                      <tr><td colSpan={7} className="text-center text-sm text-gray-400 py-8">No reviewed corrections</td></tr>
+                    ) : correctionsHistory.map((c) => (
+                      <tr key={c.id} className="hover:bg-gray-50">
+                        <td className="table-cell font-medium">{(c as any).employee?.firstName} {(c as any).employee?.lastName}</td>
+                        <td className="table-cell">{c.attendance?.date ? format(parseISO(c.attendance.date), 'MMM d, yyyy') : '—'}</td>
+                        <td className="table-cell">{c.requestedClockIn ? format(parseISO(c.requestedClockIn), 'hh:mm a') : '—'}</td>
+                        <td className="table-cell">{c.requestedClockOut ? format(parseISO(c.requestedClockOut), 'hh:mm a') : '—'}</td>
+                        <td className="table-cell">
+                          <span className={`badge ${c.status === 'APPROVED' ? 'badge-approved' : 'badge-rejected'}`}>{c.status}</span>
+                        </td>
+                        <td className="table-cell max-w-xs truncate text-gray-500 text-xs">{c.reviewerNotes || '—'}</td>
+                        <td className="table-cell text-gray-400 text-xs">{c.reviewedAt ? format(parseISO(c.reviewedAt), 'MMM d, yyyy') : '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>                </div>              </div>
+            )}
+          </div>
         </div>
       )}
 
       {tab === 'conversions' && (
-        <div className="card overflow-hidden">
-          <table className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-100"><tr>{['Employee', 'Type', 'Scheduled Date', 'Hours', ''].map((h) => <th key={h} className="table-header">{h}</th>)}</tr></thead>
-            <tbody className="divide-y divide-gray-50">
-              {!conversions?.length ? <tr><td colSpan={5} className="text-center text-sm text-gray-400 py-10">No pending conversions</td></tr> : conversions.map((c) => (
-                <tr key={c.id} className="hover:bg-gray-50">
-                  <td className="table-cell font-medium">{(c as any).employee?.user?.firstName} {(c as any).employee?.user?.lastName}</td>
-                  <td className="table-cell font-semibold">{c.type}</td>
-                  <td className="table-cell">{format(parseISO(c.scheduledDate), 'MMM d, yyyy')}</td>
-                  <td className="table-cell">{(c.totalMinutes / 60).toFixed(1)}h</td>
-                  <td className="table-cell"><ActionButtons type="conversions" id={c.id} name={`${(c as any).employee?.user?.firstName} ${(c as any).employee?.user?.lastName}`} /></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="space-y-3">
+          <div className="card overflow-hidden">
+            <div className="overflow-x-auto">
+            <table className="w-full min-w-[560px]">
+              <thead className="bg-gray-50 border-b border-gray-100"><tr>{['Employee', 'Dept', 'Type', 'Scheduled Date', 'Hours', ''].map((h) => <th key={h} className="table-header">{h}</th>)}</tr></thead>
+              <tbody className="divide-y divide-gray-50">
+                {!conversions.length ? <tr><td colSpan={6} className="text-center text-sm text-gray-400 py-10">No pending conversions</td></tr> : conversions.map((c) => (
+                  <tr key={c.id} className="hover:bg-gray-50">
+                    <td className="table-cell font-medium">{(c as any).employee?.firstName} {(c as any).employee?.lastName}</td>
+                    <td className="table-cell text-xs text-gray-500">{(c as any).employee?.department?.name || '—'}</td>
+                    <td className="table-cell font-semibold">{c.conversionType}</td>
+                    <td className="table-cell">{c.scheduledDate ? format(parseISO(c.scheduledDate), 'MMM d, yyyy') : '—'}</td>
+                    <td className="table-cell">{(c.minutesToConvert / 60).toFixed(1)}h</td>
+                    <td className="table-cell"><ActionButtons type="conversions" id={c.id} name={`${(c as any).employee?.firstName} ${(c as any).employee?.lastName}`} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>            </div>          </div>
+          <div>
+            <button onClick={() => setShowHistory((h) => !h)} className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-800 font-medium py-1">
+              <span>{showHistory ? '▲' : '▼'}</span>
+              {showHistory ? 'Hide' : 'Show'} Review History ({conversionsHistory.length})
+            </button>
+            {showHistory && (
+              <div className="card overflow-hidden mt-2">
+                <div className="overflow-x-auto">
+                <table className="w-full min-w-[750px]">
+                  <thead className="bg-gray-50 border-b border-gray-100">
+                    <tr>{['Employee', 'Dept', 'Type', 'Hours', 'Decision', 'Reviewed By', 'Notes', 'Reviewed On'].map((h) => <th key={h} className="table-header">{h}</th>)}</tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {!conversionsHistory.length ? (
+                      <tr><td colSpan={8} className="text-center text-sm text-gray-400 py-8">No reviewed conversions</td></tr>
+                    ) : conversionsHistory.map((c) => {
+                      const reviewedBy = c.deptHeadStatus && c.deptHeadStatus !== 'PENDING' ? 'Dept Head'
+                        : c.hrStatus && c.hrStatus !== 'PENDING' ? 'HR'
+                        : c.adminStatus && (c.adminStatus as string) !== 'PENDING' ? 'Admin' : '—';
+                      const reviewedAt = c.deptHeadStatus && c.deptHeadStatus !== 'PENDING' ? c.deptHeadAt
+                        : c.hrStatus && c.hrStatus !== 'PENDING' ? c.hrAt
+                        : c.adminStatus && (c.adminStatus as string) !== 'PENDING' ? c.adminAt : null;
+                      return (
+                        <tr key={c.id} className="hover:bg-gray-50">
+                          <td className="table-cell font-medium">{(c as any).employee?.firstName} {(c as any).employee?.lastName}</td>
+                          <td className="table-cell text-xs text-gray-500">{(c as any).employee?.department?.name || '—'}</td>
+                          <td className="table-cell">{c.conversionType}</td>
+                          <td className="table-cell">{(c.minutesToConvert / 60).toFixed(1)}h</td>
+                          <td className="table-cell"><span className={`badge ${c.status === 'APPROVED' ? 'badge-approved' : 'badge-rejected'}`}>{c.status}</span></td>
+                          <td className="table-cell text-xs text-gray-600">{reviewedBy}</td>
+                          <td className="table-cell max-w-xs truncate text-gray-500 text-xs">{c.reviewerNotes || '—'}</td>
+                          <td className="table-cell text-gray-400 text-xs">{reviewedAt ? format(parseISO(reviewedAt as string), 'MMM d, yyyy') : '—'}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
 

@@ -122,16 +122,32 @@ export async function cancelLeave(req: AuthRequest, res: Response): Promise<void
 }
 
 export async function getAllLeaves(req: AuthRequest, res: Response): Promise<void> {
-  const { status, departmentId, leaveType, page = '1', limit = '20' } = req.query as Record<string, string>;
+  const { status, departmentId, leaveType, startDate, endDate, page = '1', limit = '20' } = req.query as Record<string, string>;
   const skip = (parseInt(page) - 1) * parseInt(limit);
 
   try {
     const where: any = {};
     if (status) where.status = status;
     if (leaveType) where.leaveType = leaveType;
+    if (startDate || endDate) {
+      where.startDate = {};
+      if (endDate) where.startDate.lte = new Date(endDate);
+      where.endDate = {};
+      if (startDate) where.endDate.gte = new Date(startDate);
+    }
     if (req.user!.role === 'DEPARTMENT_HEAD') {
       const dept = await prisma.department.findFirst({ where: { headId: req.user!.sub } });
-      if (dept) where.employee = { departmentId: dept.id };
+      if (!dept) { res.json({ success: true, data: [], meta: { total: 0, page: parseInt(page), limit: parseInt(limit) } }); return; }
+      // Exclude the dept head's own leave — those go to HR
+      where.employee = { departmentId: dept.id, userId: { not: req.user!.sub } };
+      if (req.query.reviewed === 'true') {
+        // History: leaves already finalized
+        delete where.status;
+        where.status = { not: 'PENDING' };
+      } else {
+        // Pending queue: leaves not yet finalized
+        where.status = 'PENDING';
+      }
     } else if (departmentId) {
       where.employee = { departmentId };
     }
@@ -163,71 +179,93 @@ export async function reviewLeave(req: AuthRequest, res: Response): Promise<void
   }
 
   try {
-    const leave = await prisma.leaveRequest.findUnique({ where: { id } });
+    const leave = await prisma.leaveRequest.findUnique({ where: { id }, include: { employee: true } });
     if (!leave) { res.status(404).json({ success: false, message: 'Leave not found.' }); return; }
 
-    const updated = await prisma.leaveRequest.update({
-      where: { id },
-      data: {
-        deptHeadStatus: status as ApprovalStatus,
-        deptHeadId: req.user!.sub,
-        deptHeadAt: new Date(),
-        deptHeadNotes: notes,
-        status: status === 'REJECTED' ? ApprovalStatus.REJECTED : ApprovalStatus.PENDING,
-      },
-    });
+    const role = req.user!.role;
+    const isHrOrAdmin = role === 'HR' || role === 'ADMIN';
 
-    if (status === 'REJECTED') {
+    // Dept head: only own department, and only if not yet finalized
+    if (role === 'DEPARTMENT_HEAD') {
+      if (leave.status !== 'PENDING') {
+        res.status(400).json({ success: false, message: 'Leave has already been reviewed.' }); return;
+      }
+      if (leave.employee.userId === req.user!.sub) {
+        res.status(403).json({ success: false, message: 'You cannot approve your own leave. Please contact HR.' }); return;
+      }
+      const dept = await prisma.department.findFirst({ where: { headId: req.user!.sub } });
+      if (!dept || leave.employee.departmentId !== dept.id) {
+        res.status(403).json({ success: false, message: 'You can only review leaves from your department.' }); return;
+      }
+    }
+
+    // HR/Admin: can act as both dept head and final approver in one step
+    if (isHrOrAdmin && status === 'APPROVED') {
       const year = leave.startDate.getFullYear();
+      const updated = await prisma.leaveRequest.update({
+        where: { id },
+        data: {
+          deptHeadStatus: ApprovalStatus.APPROVED,
+          deptHeadId: req.user!.sub,
+          deptHeadAt: new Date(),
+          hrStatus: ApprovalStatus.APPROVED,
+          hrId: req.user!.sub,
+          hrAt: new Date(),
+          hrNotes: notes,
+          status: ApprovalStatus.APPROVED,
+        },
+      });
+      await prisma.leaveBalance.update({
+        where: { employeeId_year_leaveType: { employeeId: leave.employeeId, year, leaveType: leave.leaveType } },
+        data: { pendingDays: { decrement: leave.totalDays }, usedDays: { increment: leave.totalDays } },
+      });
+      await notificationService.notifyEmployee(leave.employeeId, 'APPROVAL_RESULT', { type: 'Leave Request', status, reviewer: role });
+      prisma.auditLog.create({ data: { userId: req.user!.sub, action: 'APPROVE', entity: 'LeaveRequest', entityId: id, ipAddress: req.ip, userAgent: req.headers['user-agent'] } }).catch(() => {});
+      res.json({ success: true, data: updated }); return;
+    }
+
+    if (isHrOrAdmin && status === 'REJECTED') {
+      const year = leave.startDate.getFullYear();
+      const updated = await prisma.leaveRequest.update({
+        where: { id },
+        data: {
+          deptHeadStatus: leave.deptHeadStatus ?? ApprovalStatus.REJECTED,
+          hrStatus: ApprovalStatus.REJECTED,
+          hrId: req.user!.sub,
+          hrAt: new Date(),
+          hrNotes: notes,
+          status: ApprovalStatus.REJECTED,
+        },
+      });
       await prisma.leaveBalance.update({
         where: { employeeId_year_leaveType: { employeeId: leave.employeeId, year, leaveType: leave.leaveType } },
         data: { pendingDays: { decrement: leave.totalDays } },
       });
+      await notificationService.notifyEmployee(leave.employeeId, 'APPROVAL_RESULT', { type: 'Leave Request', status, reviewer: role });
+      prisma.auditLog.create({ data: { userId: req.user!.sub, action: 'REJECT', entity: 'LeaveRequest', entityId: id, ipAddress: req.ip, userAgent: req.headers['user-agent'] } }).catch(() => {});
+      res.json({ success: true, data: updated }); return;
     }
 
-    await notificationService.notifyEmployee(leave.employeeId, 'APPROVAL_RESULT', {
-      type: 'Leave Request',
-      status,
-      reviewer: 'Department Head',
-    });
-
-    res.json({ success: true, data: updated });
-  } catch {
-    res.status(500).json({ success: false, message: 'Failed to review leave.' });
-  }
-}
-
-export async function hrReviewLeave(req: AuthRequest, res: Response): Promise<void> {
-  const { id } = req.params;
-  const { status, notes } = req.body;
-  try {
-    const leave = await prisma.leaveRequest.findUnique({ where: { id } });
-    if (!leave) { res.status(404).json({ success: false, message: 'Leave not found.' }); return; }
-    if (leave.deptHeadStatus !== 'APPROVED') {
-      res.status(400).json({ success: false, message: 'Department head approval is required first.' });
-      return;
-    }
-
+    // Dept head finalizes in one step
+    const year = leave.startDate.getFullYear();
     const finalStatus = status as ApprovalStatus;
     const updated = await prisma.leaveRequest.update({
       where: { id },
       data: {
-        hrStatus: finalStatus,
-        hrId: req.user!.sub,
-        hrAt: new Date(),
-        hrNotes: notes,
+        deptHeadStatus: finalStatus,
+        deptHeadId: req.user!.sub,
+        deptHeadAt: new Date(),
+        deptHeadNotes: notes,
         status: finalStatus,
       },
     });
 
     if (finalStatus === 'APPROVED') {
-      const year = leave.startDate.getFullYear();
       await prisma.leaveBalance.update({
         where: { employeeId_year_leaveType: { employeeId: leave.employeeId, year, leaveType: leave.leaveType } },
         data: { pendingDays: { decrement: leave.totalDays }, usedDays: { increment: leave.totalDays } },
       });
     } else {
-      const year = leave.startDate.getFullYear();
       await prisma.leaveBalance.update({
         where: { employeeId_year_leaveType: { employeeId: leave.employeeId, year, leaveType: leave.leaveType } },
         data: { pendingDays: { decrement: leave.totalDays } },
@@ -237,8 +275,10 @@ export async function hrReviewLeave(req: AuthRequest, res: Response): Promise<vo
     await notificationService.notifyEmployee(leave.employeeId, 'APPROVAL_RESULT', {
       type: 'Leave Request',
       status,
-      reviewer: 'HR',
+      reviewer: role === 'DEPARTMENT_HEAD' ? 'Department Head' : role,
     });
+
+    prisma.auditLog.create({ data: { userId: req.user!.sub, action: finalStatus === 'APPROVED' ? 'APPROVE' : 'REJECT', entity: 'LeaveRequest', entityId: id, ipAddress: req.ip, userAgent: req.headers['user-agent'] } }).catch(() => {});
 
     res.json({ success: true, data: updated });
   } catch {

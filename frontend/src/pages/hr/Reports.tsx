@@ -1,26 +1,32 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../services/api';
-import { Department } from '../../types';
-import { format, startOfMonth, endOfMonth } from 'date-fns';
+import { Department, Employee } from '../../types';
+import { format } from 'date-fns';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
+import * as XLSX from 'xlsx';
 
 type ReportType = 'attendance' | 'leave' | 'overtime' | 'absence';
 
 export default function ReportsPage() {
   const [reportType, setReportType] = useState<ReportType>('attendance');
-  const [month, setMonth] = useState(() => format(new Date(), 'yyyy-MM'));
+  const today = format(new Date(), 'yyyy-MM-dd');
+  const firstOfMonth = format(new Date(new Date().getFullYear(), new Date().getMonth(), 1), 'yyyy-MM-dd');
+  const [startDate, setStartDate] = useState(firstOfMonth);
+  const [endDate, setEndDate] = useState(today);
   const [deptFilter, setDeptFilter] = useState('');
-
-  const [year, m] = month.split('-').map(Number);
-  const startDate = format(startOfMonth(new Date(year, m - 1)), 'yyyy-MM-dd');
-  const endDate = format(endOfMonth(new Date(year, m - 1)), 'yyyy-MM-dd');
+  const [employeeFilter, setEmployeeFilter] = useState('');
+  const [exporting, setExporting] = useState(false);
 
   const { data: depts } = useQuery<Department[]>({ queryKey: ['departments'], queryFn: () => api.get('/departments').then((r) => r.data.data) });
+  const { data: employees } = useQuery<Employee[]>({
+    queryKey: ['report-employees', deptFilter],
+    queryFn: () => api.get(`/employees?departmentId=${deptFilter}&limit=500`).then((r) => r.data.data),
+  });
 
   const { data: reportData, isLoading } = useQuery({
-    queryKey: ['report', reportType, startDate, endDate, deptFilter],
-    queryFn: () => api.get(`/reports/${reportType}?startDate=${startDate}&endDate=${endDate}${deptFilter ? `&departmentId=${deptFilter}` : ''}`).then((r) => r.data.data),
+    queryKey: ['report', reportType, startDate, endDate, deptFilter, employeeFilter],
+    queryFn: () => api.get(`/reports/${reportType}?startDate=${startDate}&endDate=${endDate}${employeeFilter ? `&employeeId=${employeeFilter}` : deptFilter ? `&departmentId=${deptFilter}` : ''}`).then((r) => r.data.data),
   });
 
   const reportTypes: { key: ReportType; label: string }[] = [
@@ -30,8 +36,33 @@ export default function ReportsPage() {
     { key: 'absence', label: 'Absences' },
   ];
 
-  const handleExport = () => {
-    window.open(`/api/reports/attendance/export?startDate=${startDate}&endDate=${endDate}${deptFilter ? `&departmentId=${deptFilter}` : ''}`, '_blank');
+  const handleExport = async () => {
+    if (exporting) return;
+    try {
+      setExporting(true);
+      if (reportType === 'attendance') {
+        // Use dedicated XLSX endpoint (sends auth header via api instance)
+        const resp = await api.get(
+          `/reports/attendance/export?startDate=${startDate}&endDate=${endDate}${employeeFilter ? `&employeeId=${employeeFilter}` : deptFilter ? `&departmentId=${deptFilter}` : ''}`,
+          { responseType: 'blob' },
+        );
+        const url = URL.createObjectURL(resp.data);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `attendance_${startDate}_to_${endDate}.xlsx`;
+        a.click();
+        URL.revokeObjectURL(url);
+      } else {
+        // Export summary of current report as XLSX client-side
+        if (!reportData?.summary?.length) return;
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.json_to_sheet(reportData.summary);
+        XLSX.utils.book_append_sheet(wb, ws, reportType.charAt(0).toUpperCase() + reportType.slice(1));
+        XLSX.writeFile(wb, `${reportType}_${startDate}_to_${endDate}.xlsx`);
+      }
+    } finally {
+      setExporting(false);
+    }
   };
 
   return (
@@ -41,7 +72,9 @@ export default function ReportsPage() {
           <h1 className="text-2xl font-black">Reports</h1>
           <p className="text-sm text-gray-500 mt-0.5">Analytics and downloadable reports</p>
         </div>
-        <button onClick={handleExport} className="btn-primary">Export Attendance XLSX</button>
+        <button onClick={handleExport} disabled={exporting || !reportData?.summary?.length} className="btn-primary disabled:opacity-50">
+          {exporting ? 'Exporting…' : `Export ${reportType.charAt(0).toUpperCase() + reportType.slice(1)} XLSX`}
+        </button>
       </div>
 
       {/* Controls */}
@@ -53,10 +86,19 @@ export default function ReportsPage() {
             </button>
           ))}
         </div>
-        <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="input w-auto text-sm" />
-        <select value={deptFilter} onChange={(e) => setDeptFilter(e.target.value)} className="input w-auto text-sm">
+        <div className="flex items-center gap-2">
+          <label className="text-xs text-gray-500 font-medium">From</label>
+          <input type="date" value={startDate} max={endDate} onChange={(e) => setStartDate(e.target.value)} className="input w-auto text-sm" />
+          <label className="text-xs text-gray-500 font-medium">To</label>
+          <input type="date" value={endDate} min={startDate} onChange={(e) => setEndDate(e.target.value)} className="input w-auto text-sm" />
+        </div>
+        <select value={deptFilter} onChange={(e) => { setDeptFilter(e.target.value); setEmployeeFilter(''); }} className="input w-auto text-sm">
           <option value="">All Departments</option>
           {depts?.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+        </select>
+        <select value={employeeFilter} onChange={(e) => setEmployeeFilter(e.target.value)} className="input w-auto text-sm">
+          <option value="">All Employees</option>
+          {employees?.map((e) => <option key={e.id} value={e.id}>{e.lastName}, {e.firstName}</option>)}
         </select>
       </div>
 
@@ -66,7 +108,7 @@ export default function ReportsPage() {
       ) : reportData && Array.isArray(reportData.chartData) ? (
         <div className="card p-6">
           <h2 className="font-semibold text-sm mb-4">
-            {reportType.charAt(0).toUpperCase() + reportType.slice(1)} Summary — {format(new Date(year, m - 1), 'MMMM yyyy')}
+            {reportType.charAt(0).toUpperCase() + reportType.slice(1)} Summary — {startDate} to {endDate}
           </h2>
           <ResponsiveContainer width="100%" height={240}>
             {reportType === 'attendance' ? (

@@ -30,8 +30,8 @@ export default function LoginPage() {
       {/* Left panel - branding */}
       <div className="hidden lg:flex lg:w-1/2 bg-black text-white flex-col justify-between p-12">
         <div>
-          <div className="font-black text-3xl tracking-tight">TAMS</div>
-          <div className="text-gray-400 text-sm mt-1 uppercase tracking-widest">Time & Attendance System</div>
+          <img src="/alpas-logo.png" alt="ALPAS" className="w-80 brightness-0 invert" />
+          <div className="text-gray-400 text-sm mt-3 uppercase tracking-widest">Time & Attendance System</div>
         </div>
         <div>
           <blockquote className="text-2xl font-light leading-relaxed">
@@ -52,14 +52,14 @@ export default function LoginPage() {
             ))}
           </div>
         </div>
-        <div className="text-xs text-gray-600">© {new Date().getFullYear()} TAMS. Enterprise Edition.</div>
+        <div className="text-xs text-gray-600">© {new Date().getFullYear()} ALPAS. Enterprise Edition.</div>
       </div>
 
       {/* Right panel - login form */}
       <div className="flex-1 flex items-center justify-center p-6 md:p-12">
         <div className="w-full max-w-sm">
           <div className="lg:hidden mb-8">
-            <div className="font-black text-2xl">TAMS</div>
+            <img src="/alpas-logo.png" alt="ALPAS" className="w-64 mb-2" />
             <div className="text-gray-400 text-xs uppercase tracking-widest">Time & Attendance System</div>
           </div>
 

@@ -12,13 +12,14 @@ interface AdminDashboardData {
 }
 
 export default function AdminDashboard() {
-  const { data, isLoading } = useQuery<AdminDashboardData>({
+  const { data, isLoading, isError } = useQuery<AdminDashboardData>({
     queryKey: ['admin-dashboard'],
     queryFn: () => api.get('/dashboard/admin').then((r) => r.data.data),
     refetchInterval: 60_000,
   });
 
   if (isLoading) return <div className="space-y-4">{[...Array(4)].map((_, i) => <div key={i} className="h-32 bg-gray-100 rounded-xl animate-pulse" />)}</div>;
+  if (isError) return <div className="text-sm text-red-500 p-4">Failed to load dashboard. Please refresh.</div>;
 
   const pending = data?.pendingRequests;
   const pendingTotal = (pending?.leaves || 0) + (pending?.overtime || 0) + (pending?.corrections || 0) + (pending?.conversions || 0);
@@ -42,8 +43,8 @@ export default function AdminDashboard() {
         </div>
         <div className="stat-card">
           <div className="text-xs text-gray-500 uppercase tracking-wide font-semibold">Today Present</div>
-          <div className="text-3xl font-black">{data?.todayAttendance.present}</div>
-          <div className="text-xs text-red-500">{data?.todayAttendance.absent} absent</div>
+          <div className="text-3xl font-black">{data?.todayAttendance?.present ?? 0}</div>
+          <div className="text-xs text-red-500">{data?.todayAttendance?.absent ?? 0} absent</div>
         </div>
         <div className={`stat-card ${pendingTotal > 0 ? 'border-black' : ''}`}>
           <div className="text-xs text-gray-500 uppercase tracking-wide font-semibold">Pending Total</div>

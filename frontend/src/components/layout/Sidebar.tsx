@@ -16,6 +16,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Leave', path: '/leave', icon: '◈', roles: ['EMPLOYEE', 'DEPARTMENT_HEAD', 'HR', 'ADMIN'] },
   { label: 'Overtime', path: '/overtime', icon: '⊕', roles: ['EMPLOYEE', 'DEPARTMENT_HEAD', 'HR', 'ADMIN'] },
   { label: 'Corrections', path: '/corrections', icon: '✎', roles: ['EMPLOYEE', 'DEPARTMENT_HEAD', 'HR', 'ADMIN'] },
+  { label: 'My Profile', path: '/profile', icon: '◯', roles: ['EMPLOYEE', 'DEPARTMENT_HEAD', 'HR', 'ADMIN'] },
   // Dept Head
   { label: 'Team Overview', path: '/dept-head/dashboard', icon: '◉', roles: ['DEPARTMENT_HEAD', 'HR', 'ADMIN'] },
   { label: 'Approvals', path: '/dept-head/approvals', icon: '✓', roles: ['DEPARTMENT_HEAD', 'HR', 'ADMIN'] },
@@ -57,8 +58,8 @@ export default function Sidebar({ onClose }: Props) {
       {/* Logo */}
       <div className="flex items-center justify-between px-5 py-5 border-b border-gray-200">
         <div>
-          <div className="font-black text-lg tracking-tight">TAMS</div>
-          <div className="text-[10px] text-gray-400 uppercase tracking-widest">Time & Attendance</div>
+          <img src="/alpas-logo.png" alt="ALPAS" className="w-40" />
+          <div className="text-[10px] text-gray-400 uppercase tracking-widest mt-0.5">Time & Attendance</div>
         </div>
         <button onClick={onClose} className="lg:hidden p-1 hover:bg-gray-100 rounded">✕</button>
       </div>

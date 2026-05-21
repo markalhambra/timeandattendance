@@ -22,9 +22,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (token) {
       authService.me()
         .then(setUser)
-        .catch(() => {
-          localStorage.removeItem('accessToken');
-          localStorage.removeItem('refreshToken');
+        .catch((err) => {
+          // Only clear tokens on actual auth errors (401), not network errors
+          const status = err?.response?.status;
+          if (status === 401 || status === 403) {
+            localStorage.removeItem('accessToken');
+            localStorage.removeItem('refreshToken');
+          }
         })
         .finally(() => setIsLoading(false));
     } else {

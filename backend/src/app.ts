@@ -9,6 +9,7 @@ import rateLimit from 'express-rate-limit';
 import path from 'path';
 
 import { logger } from './config/logger';
+import { prisma } from './config/database';
 import { authRoutes } from './routes/auth.routes';
 import { employeeRoutes } from './routes/employee.routes';
 import { attendanceRoutes } from './routes/attendance.routes';
@@ -18,6 +19,7 @@ import { departmentRoutes } from './routes/department.routes';
 import { reportRoutes } from './routes/report.routes';
 import { notificationRoutes } from './routes/notification.routes';
 import { dashboardRoutes } from './routes/dashboard.routes';
+import { auditRoutes } from './routes/audit.routes';
 import { scheduleCronJobs } from './services/cron.service';
 import { cronRoutes } from './routes/cron.routes';
 
@@ -49,7 +51,7 @@ const globalLimiter = rateLimit({
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 20,
+  max: process.env.NODE_ENV === 'production' ? 20 : 1000,
   message: { success: false, message: 'Too many authentication attempts.' },
 });
 
@@ -73,8 +75,15 @@ app.use('/uploads', express.static(path.join(process.cwd(), 'uploads'), {
 }));
 
 // ─── Health Check ─────────────────────────────────────────────────────────
-app.get('/health', (_req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString(), version: '1.0.0' });
+// Queries the DB so external uptime monitors (e.g. UptimeRobot) pinging this
+// endpoint also keep the Supabase project alive during weekends/long holidays.
+app.get('/health', async (_req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({ status: 'ok', timestamp: new Date().toISOString(), version: '1.0.0' });
+  } catch {
+    res.status(503).json({ status: 'error', timestamp: new Date().toISOString() });
+  }
 });
 
 // ─── Routes ───────────────────────────────────────────────────────────────
@@ -87,6 +96,7 @@ app.use('/api/departments', departmentRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/audit-logs', auditRoutes);
 app.use('/api/cron', cronRoutes);
 
 // ─── 404 Handler ──────────────────────────────────────────────────────────

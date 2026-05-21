@@ -31,7 +31,7 @@ function StatCard({ label, value, sub, color = '' }: { label: string; value: str
 }
 
 export default function EmployeeDashboard() {
-  const { data, isLoading } = useQuery<DashboardData>({
+  const { data, isLoading, isError } = useQuery<DashboardData>({
     queryKey: ['employee-dashboard'],
     queryFn: () => api.get('/dashboard/employee').then((r) => r.data.data),
     refetchInterval: 60_000,
@@ -51,6 +51,7 @@ export default function EmployeeDashboard() {
       {[...Array(4)].map((_, i) => <div key={i} className="h-32 bg-gray-100 rounded-xl animate-pulse" />)}
     </div>
   );
+  if (isError) return <div className="text-sm text-red-500 p-4">Failed to load dashboard. Please refresh.</div>;
 
   const m = data?.monthlySummary;
 
@@ -133,7 +134,7 @@ export default function EmployeeDashboard() {
         {/* Overtime credits */}
         <div className="card p-6">
           <h2 className="font-bold text-base mb-4">Overtime Credits</h2>
-          {data?.overtimeCredit.totalMinutes ? (
+          {data?.overtimeCredit?.totalMinutes ? (
             <div>
               <div className="text-center py-3">
                 <div className="text-4xl font-black">{(data.overtimeCredit.totalMinutes / 60).toFixed(1)}h</div>
@@ -149,7 +150,7 @@ export default function EmployeeDashboard() {
                   <div className="text-[11px] text-gray-500">Min 8h</div>
                 </div>
               </div>
-              {data.overtimeCredit.records.slice(0, 3).map((r) => (
+              {(data.overtimeCredit?.records ?? []).slice(0, 3).map((r) => (
                 <div key={r.id} className="flex justify-between items-center py-2 border-t border-gray-100 mt-3 text-sm">
                   <span className="text-gray-600">{format(parseISO(r.date), 'MMM d, yyyy')}</span>
                   <div className="flex items-center gap-2">
@@ -185,6 +186,7 @@ export default function EmployeeDashboard() {
           </div>
         </div>
       ) : null}
+
     </div>
   );
 }

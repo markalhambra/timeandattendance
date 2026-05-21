@@ -101,4 +101,47 @@ export function scheduleCronJobs(): void {
   }, { timezone: 'Asia/Manila' });
 
   logger.info('✅ Cron jobs scheduled');
+
+  // Expire unfiled overtime records older than 15 days - runs daily at midnight
+  cron.schedule('2 0 * * *', async () => {
+    logger.info('Cron: Expiring unfiled overtime records (15-day window)...');
+    try {
+      const deadline = new Date();
+      deadline.setDate(deadline.getDate() - 15);
+      const expired = await prisma.overtimeRecord.updateMany({
+        where: { isFiled: false, createdAt: { lt: deadline } },
+        data: { status: 'REJECTED', reviewerNotes: 'Filing window expired. Must be filed within 15 days of creation.' },
+      });
+      if (expired.count > 0) logger.info(`Expired ${expired.count} unfiled overtime records (15-day window).`);
+    } catch (err) {
+      logger.error('Unfiled OT expiry cron error:', err);
+    }
+  });
+
+  // Reset all leave balances for all active employees every January 1 at midnight PHT
+  cron.schedule('0 0 1 1 *', async () => {
+    logger.info('Cron: Resetting all leave balances for new year...');
+    try {
+      const year = new Date().getFullYear();
+      const employees = await prisma.employee.findMany({
+        where: { isActive: true },
+        select: { id: true },
+      });
+
+      const defaults: Record<string, number> = { SICK: 10, VACATION: 15, PML: 7, SML: 3 };
+
+      for (const emp of employees) {
+        for (const leaveType of ['SICK', 'VACATION', 'PML', 'SML'] as const) {
+          await prisma.leaveBalance.upsert({
+            where: { employeeId_year_leaveType: { employeeId: emp.id, year, leaveType } },
+            update: { totalDays: defaults[leaveType], usedDays: 0, pendingDays: 0 },
+            create: { employeeId: emp.id, year, leaveType, totalDays: defaults[leaveType], usedDays: 0, pendingDays: 0 },
+          });
+        }
+      }
+      logger.info(`Reset all leave balances for ${employees.length} employees for year ${year}.`);
+    } catch (err) {
+      logger.error('Yearly leave reset cron error:', err);
+    }
+  }, { timezone: 'Asia/Manila' });
 }

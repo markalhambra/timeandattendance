@@ -7,7 +7,7 @@ import { Link } from 'react-router-dom';
 interface DeptDashboardData {
   department: { id: string; name: string };
   todayStats: { total: number; present: number; absent: number; onsite: number; wfh: number; ob: number };
-  todayRecords: (AttendanceRecord & { employee: { user: { firstName: string; lastName: string } } })[];
+  todayRecords: (AttendanceRecord & { employee: { firstName: string; lastName: string; employeeNumber: string } })[];
   pendingLeaves: number;
   pendingOvertimes: number;
   pendingCorrections: number;
@@ -15,7 +15,7 @@ interface DeptDashboardData {
 }
 
 export default function DeptHeadDashboard() {
-  const { data, isLoading } = useQuery<DeptDashboardData>({
+  const { data, isLoading, isError } = useQuery<DeptDashboardData>({
     queryKey: ['depthead-dashboard'],
     queryFn: () => api.get('/dashboard/department-head').then((r) => r.data.data),
     refetchInterval: 60_000,
@@ -29,6 +29,7 @@ export default function DeptHeadDashboard() {
   };
 
   if (isLoading) return <div className="space-y-4">{[...Array(3)].map((_, i) => <div key={i} className="h-32 bg-gray-100 rounded-xl animate-pulse" />)}</div>;
+  if (isError) return <div className="text-sm text-red-500 p-4">Failed to load dashboard. Please refresh.</div>;
 
   const s = data?.todayStats;
   const pendingTotal = (data?.pendingLeaves || 0) + (data?.pendingOvertimes || 0) + (data?.pendingCorrections || 0);
@@ -101,7 +102,7 @@ export default function DeptHeadDashboard() {
               ) : (
                 data.todayRecords.map((r) => (
                   <tr key={r.id} className="hover:bg-gray-50">
-                    <td className="table-cell font-medium">{r.employee?.user?.firstName} {r.employee?.user?.lastName}</td>
+                    <td className="table-cell font-medium">{r.employee?.firstName} {r.employee?.lastName}</td>
                     <td className="table-cell">{r.clockIn ? format(new Date(r.clockIn), 'hh:mm a') : '—'}</td>
                     <td className="table-cell">{r.clockOut ? format(new Date(r.clockOut), 'hh:mm a') : '—'}</td>
                     <td className="table-cell">{statusBadge(r.status)}</td>

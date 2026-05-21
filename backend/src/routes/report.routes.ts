@@ -9,5 +9,5 @@ reportRoutes.use(authorize('HR', 'ADMIN'));
 reportRoutes.get('/attendance', reportController.attendanceReport);
 reportRoutes.get('/leave', reportController.leaveReport);
 reportRoutes.get('/overtime', reportController.overtimeReport);
-reportRoutes.get('/absences', reportController.absenceReport);
-reportRoutes.get('/export/attendance', reportController.exportAttendance);
+reportRoutes.get('/absence', reportController.absenceReport);
+reportRoutes.get('/attendance/export', reportController.exportAttendance);

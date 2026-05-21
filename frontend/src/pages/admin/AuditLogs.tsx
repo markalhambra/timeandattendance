@@ -34,7 +34,7 @@ export default function AuditLogs() {
     queryFn: () => api.get(`/audit-logs?page=${page}&limit=50${search ? `&search=${encodeURIComponent(search)}` : ''}${actionFilter ? `&action=${actionFilter}` : ''}`).then((r) => r.data.data),
   });
 
-  const actions = ['CREATE', 'UPDATE', 'DELETE', 'LOGIN', 'LOGOUT', 'APPROVE', 'REJECT', 'CLOCK_IN', 'CLOCK_OUT'];
+  const actions = ['CREATE', 'UPDATE', 'DELETE', 'LOGIN', 'LOGOUT', 'APPROVE', 'REJECT', 'PASSWORD_RESET'];
 
   return (
     <div className="space-y-6">

@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import { GeoLocation, AttendanceRecord, AttendanceStatus } from '../../types';
 import toast from 'react-hot-toast';
+import { format, parseISO } from 'date-fns';
 
 const OFFICE_LAT = parseFloat(import.meta.env.VITE_OFFICE_LAT || '14.5995');
 const OFFICE_LNG = parseFloat(import.meta.env.VITE_OFFICE_LNG || '120.9842');
@@ -34,11 +36,15 @@ export default function ClockWidget() {
   const [selectedStatus, setSelectedStatus] = useState<AttendanceStatus>('WFH');
   const [distance, setDistance] = useState<number | null>(null);
 
-  const { data: today, isLoading } = useQuery<AttendanceRecord | null>({
+  const { data: todayData, isLoading } = useQuery<{ data: AttendanceRecord | null; missedClockOut: AttendanceRecord | null }>({ 
     queryKey: ['today-attendance'],
-    queryFn: () => api.get('/attendance/today').then((r) => r.data.data),
+    queryFn: () => api.get('/attendance/today').then((r) => ({ data: r.data.data, missedClockOut: r.data.missedClockOut ?? null })),
     refetchInterval: 60_000,
   });
+
+  const today = todayData?.data ?? null;
+  const missedClockOut = todayData?.missedClockOut ?? null;
+  const navigate = useNavigate();
 
   // Live working timer
   useEffect(() => {
@@ -127,6 +133,22 @@ export default function ClockWidget() {
 
   return (
     <>
+      {missedClockOut && (
+        <div className="card px-4 py-3 bg-amber-50 border border-amber-200 flex items-start gap-3">
+          <span className="text-amber-500 text-lg leading-none mt-0.5">⚠</span>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-amber-800">Missed clock-out on {format(parseISO(missedClockOut.date), 'MMMM d, yyyy')}</p>
+            <p className="text-xs text-amber-700 mt-0.5">You forgot to clock out. Please file a time correction so your hours are recorded correctly.</p>
+          </div>
+          <button
+            onClick={() => navigate('/attendance')}
+            className="text-xs font-semibold text-amber-800 underline whitespace-nowrap hover:text-amber-900 shrink-0"
+          >
+            File Correction
+          </button>
+        </div>
+      )}
+
       <div className="card p-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-bold text-base">Time Clock</h2>

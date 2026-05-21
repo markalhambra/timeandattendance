@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Build outputs
+dist/
+build/
+.next/
+out/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Runtime / OS
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+
+# Vite
+.vite/
+frontend/node_modules/.vite/
+
+# Uploads (local disk — using Supabase Storage in prod)
+uploads/
+
+# Prisma generated client (regenerated on deploy)
+backend/node_modules/.prisma/
+
+# Vercel
+.vercel/

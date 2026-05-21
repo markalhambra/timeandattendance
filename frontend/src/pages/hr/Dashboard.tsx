@@ -1,6 +1,8 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../services/api';
-import { format } from 'date-fns';
+import { Department } from '../../types';
+import { format, parseISO, startOfMonth, endOfMonth } from 'date-fns';
 
 interface HRDashboardData {
   totalEmployees: number;
@@ -14,7 +16,11 @@ interface HRDashboardData {
 }
 
 export default function HRDashboard() {
-  const { data, isLoading } = useQuery<HRDashboardData>({
+  const [schedMonth, setSchedMonth] = useState(() => format(new Date(), 'yyyy-MM'));
+  const [schedDept, setSchedDept] = useState('');
+  const [schedType, setSchedType] = useState('');
+
+  const { data, isLoading, isError } = useQuery<HRDashboardData>({
     queryKey: ['hr-dashboard'],
     queryFn: () => api.get('/dashboard/hr').then((r) => r.data.data),
     refetchInterval: 60_000,
@@ -22,10 +28,64 @@ export default function HRDashboard() {
 
   const today = new Date().toLocaleDateString('en-PH', { timeZone: 'Asia/Manila', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
-  if (isLoading) return <div className="space-y-4">{[...Array(4)].map((_, i) => <div key={i} className="h-32 bg-gray-100 rounded-xl animate-pulse" />)}</div>;
+  const [yr, mo] = schedMonth.split('-').map(Number);
+  const start = format(startOfMonth(new Date(yr, mo - 1)), 'yyyy-MM-dd');
+  const end = format(endOfMonth(new Date(yr, mo - 1)), 'yyyy-MM-dd');
+
+  const { data: depts } = useQuery<Department[]>({ queryKey: ['departments'], queryFn: () => api.get('/departments').then((r) => r.data.data) });
+
+  const isConvFilter = schedType === 'CTO' || schedType === 'CDO';
+
+  const { data: schedLeaves } = useQuery<any[]>({
+    queryKey: ['hr-sched-leaves', start, end, schedDept, schedType],
+    queryFn: () => {
+      if (isConvFilter) return Promise.resolve([]);
+      const params = new URLSearchParams({ status: 'APPROVED', startDate: start, endDate: end, limit: '200' });
+      if (schedDept) params.set('departmentId', schedDept);
+      if (schedType) params.set('leaveType', schedType);
+      return api.get(`/leave?${params}`).then((r) => r.data.data);
+    },
+  });
+
+  const { data: schedConversions } = useQuery<any[]>({
+    queryKey: ['hr-sched-conversions', start, end, schedDept, schedType],
+    queryFn: () => {
+      if (schedType && !isConvFilter) return Promise.resolve([]);
+      const params = new URLSearchParams({ status: 'APPROVED', limit: '200' });
+      if (schedDept) params.set('departmentId', schedDept);
+      if (schedType) params.set('conversionType', schedType);
+      return api.get(`/overtime/conversions?${params}`).then((r) => r.data.data);
+    },
+  });
+
+  const leaveTypeLabel: Record<string, string> = { SICK: 'Sick Leave', VACATION: 'Vacation', PML: 'Pamilya Muna', SML: 'Sarili Muna' };
+
+  const allItems: any[] = [
+    ...(schedLeaves ?? []).map((l: any) => ({
+      key: `l-${l.id}`, kind: 'leave',
+      employee: `${l.employee?.firstName ?? ''} ${l.employee?.lastName ?? ''}`.trim(),
+      dept: l.employee?.department?.name ?? '—',
+      type: leaveTypeLabel[l.leaveType] || l.leaveType,
+      dateLabel: `${format(parseISO(l.startDate), 'MMM d')} – ${format(parseISO(l.endDate), 'MMM d, yyyy')} (${l.totalDays}d)`,
+      sortDate: l.startDate,
+      badge: 'bg-blue-50 text-blue-700',
+    })),
+    ...(schedConversions ?? []).filter((c: any) => c.scheduledDate).map((c: any) => ({
+      key: `c-${c.id}`, kind: 'conversion',
+      employee: `${c.employee?.firstName ?? ''} ${c.employee?.lastName ?? ''}`.trim(),
+      dept: c.employee?.department?.name ?? '—',
+      type: c.conversionType,
+      dateLabel: format(parseISO(c.scheduledDate), 'MMM d, yyyy'),
+      sortDate: c.scheduledDate,
+      badge: c.conversionType === 'CTO' ? 'bg-amber-50 text-amber-700' : 'bg-orange-50 text-orange-700',
+    })),
+  ].sort((a, b) => a.sortDate.localeCompare(b.sortDate));
 
   const t = data?.todayStats;
   const pendingTotal = (data?.pendingLeaves || 0) + (data?.pendingOvertimes || 0) + (data?.pendingConversions || 0);
+
+  if (isLoading) return <div className="space-y-4">{[...Array(4)].map((_, i) => <div key={i} className="h-32 bg-gray-100 rounded-xl animate-pulse" />)}</div>;
+  if (isError) return <div className="text-sm text-red-500 p-4">Failed to load dashboard. Please refresh.</div>;
 
   return (
     <div className="space-y-6">
@@ -86,6 +146,49 @@ export default function HRDashboard() {
               <span className="text-xs text-gray-600">{seg.label} <span className="font-bold">{seg.value}</span></span>
             </div>
           ))}
+        </div>
+      </div>
+
+      {/* Schedule Summary */}
+      <div className="card overflow-hidden">
+        <div className="px-5 py-4 border-b border-gray-100">
+          <h2 className="font-semibold text-sm mb-3">Employee Schedule Summary</h2>
+          <div className="flex flex-wrap gap-2">
+            <input type="month" value={schedMonth} onChange={(e) => setSchedMonth(e.target.value)} className="input w-auto text-sm" />
+            <select value={schedDept} onChange={(e) => setSchedDept(e.target.value)} className="input w-auto text-sm">
+              <option value="">All Departments</option>
+              {depts?.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+            </select>
+            <select value={schedType} onChange={(e) => setSchedType(e.target.value)} className="input w-auto text-sm">
+              <option value="">All Types</option>
+              <option value="SICK">Sick Leave</option>
+              <option value="VACATION">Vacation</option>
+              <option value="PML">Pamilya Muna</option>
+              <option value="SML">Sarili Muna</option>
+              <option value="CTO">CTO</option>
+              <option value="CDO">CDO</option>
+            </select>
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gray-50 border-b border-gray-100">
+              <tr>{['Employee', 'Department', 'Type', 'Date / Schedule'].map((h) => <th key={h} className="table-header">{h}</th>)}</tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {!allItems.length
+                ? <tr><td colSpan={4} className="text-center text-sm text-gray-400 py-10">No approved schedules for this period</td></tr>
+                : allItems.map((item) => (
+                  <tr key={item.key} className="hover:bg-gray-50">
+                    <td className="table-cell font-medium">{item.employee || '—'}</td>
+                    <td className="table-cell text-xs text-gray-500">{item.dept}</td>
+                    <td className="table-cell"><span className={`badge ${item.badge}`}>{item.type}</span></td>
+                    <td className="table-cell text-sm">{item.dateLabel}</td>
+                  </tr>
+                ))
+              }
+            </tbody>
+          </table>
         </div>
       </div>
 

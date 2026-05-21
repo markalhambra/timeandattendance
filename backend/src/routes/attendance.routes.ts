@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import * as attendanceController from '../controllers/attendance.controller';
 import { authenticate, authorize } from '../middleware/auth.middleware';
+import { auditLog } from '../middleware/audit.middleware';
 
 export const attendanceRoutes = Router();
 attendanceRoutes.use(authenticate);
@@ -13,7 +14,7 @@ attendanceRoutes.get('/my', attendanceController.getMyAttendance);
 attendanceRoutes.get('/monthly-summary', attendanceController.getMonthlySummary);
 
 // Corrections
-attendanceRoutes.post('/corrections', attendanceController.requestCorrection);
+attendanceRoutes.post('/corrections', auditLog('CREATE', 'AttendanceCorrection'), attendanceController.requestCorrection);
 attendanceRoutes.get('/corrections/my', attendanceController.getMyCorrections);
 attendanceRoutes.get('/corrections', authorize('DEPARTMENT_HEAD', 'HR', 'ADMIN'), attendanceController.getCorrections);
 attendanceRoutes.patch('/corrections/:id/review', authorize('DEPARTMENT_HEAD', 'HR', 'ADMIN'), attendanceController.reviewCorrection);

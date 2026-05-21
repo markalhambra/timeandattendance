@@ -106,7 +106,8 @@ export async function refreshToken(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    const newPayload = { sub: user.id, role: user.role };
+    const employee = await prisma.employee.findUnique({ where: { userId: user.id }, select: { id: true } });
+    const newPayload = { sub: user.id, role: user.role, employeeId: employee?.id };
     const accessToken = signAccessToken(newPayload);
     const newRefreshToken = signRefreshToken(newPayload);
 
@@ -145,8 +146,10 @@ export async function me(req: AuthRequest, res: Response): Promise<void> {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.user!.sub },
-      include: { employee: { include: { department: true } } },
-      omit: { password: true, refreshToken: true, passwordResetToken: true, passwordResetExpires: true },
+      select: {
+        id: true, email: true, role: true, isActive: true, lastLogin: true, createdAt: true, updatedAt: true,
+        employee: { include: { department: true } },
+      },
     });
     res.json({ success: true, data: user });
   } catch {

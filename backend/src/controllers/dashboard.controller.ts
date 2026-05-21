@@ -59,12 +59,16 @@ export async function employeeDashboard(req: AuthRequest, res: Response): Promis
 export async function deptHeadDashboard(req: AuthRequest, res: Response): Promise<void> {
   try {
     const dept = await prisma.department.findFirst({ where: { headId: req.user!.sub } });
-    const deptId = dept?.id;
+    if (!dept) {
+      res.json({ success: true, data: { department: null, totalEmployees: 0, todayStats: { total: 0, present: 0, absent: 0, onsite: 0, wfh: 0, ob: 0 }, todayRecords: [], pendingLeaves: 0, pendingOvertimes: 0, pendingCorrections: 0 } });
+      return;
+    }
+    const deptId = dept.id;
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const where = deptId ? { departmentId: deptId, isActive: true } : { isActive: true };
+    const where = { departmentId: deptId, isActive: true, isArchived: false };
 
     const [employees, todayAttendance, pendingLeaves, pendingOvertime, pendingCorrections] = await Promise.all([
       prisma.employee.count({ where }),
@@ -81,15 +85,19 @@ export async function deptHeadDashboard(req: AuthRequest, res: Response): Promis
       success: true,
       data: {
         department: dept,
-        employees,
-        todayAttendance,
+        totalEmployees: employees,
         todayStats: {
           total: todayAttendance.length,
+          present: todayAttendance.length,
+          absent: Math.max(0, employees - todayAttendance.length),
           onsite: todayAttendance.filter((r) => r.status === 'ON_SITE').length,
           wfh: todayAttendance.filter((r) => r.status === 'WFH').length,
           ob: todayAttendance.filter((r) => r.status === 'OB').length,
         },
-        pendingApprovals: { leaves: pendingLeaves, overtime: pendingOvertime, corrections: pendingCorrections },
+        todayRecords: todayAttendance,
+        pendingLeaves,
+        pendingOvertimes: pendingOvertime,
+        pendingCorrections,
       },
     });
   } catch {
@@ -103,9 +111,9 @@ export async function hrDashboard(_req: AuthRequest, res: Response): Promise<voi
     today.setHours(0, 0, 0, 0);
 
     const [totalEmployees, todayAttendance, pendingLeaves, pendingCorrections, departments] = await Promise.all([
-      prisma.employee.count({ where: { isActive: true } }),
+      prisma.employee.count({ where: { isActive: true, isArchived: false } }),
       prisma.attendanceRecord.findMany({
-        where: { date: today },
+        where: { date: today, employee: { isArchived: false } },
         include: {
           employee: {
             select: {
@@ -115,31 +123,43 @@ export async function hrDashboard(_req: AuthRequest, res: Response): Promise<voi
           },
         },
       }),
-      prisma.leaveRequest.count({ where: { status: 'PENDING' } }),
-      prisma.attendanceCorrection.count({ where: { status: 'PENDING' } }),
+      prisma.leaveRequest.count({ where: { status: 'PENDING', employee: { isArchived: false } } }),
+      prisma.attendanceCorrection.count({ where: { status: 'PENDING', employee: { isArchived: false } } }),
       prisma.department.findMany({
         where: { isActive: true },
-        include: { _count: { select: { employees: { where: { isActive: true } } } } },
+        include: { _count: { select: { employees: { where: { isActive: true, isArchived: false } } } } },
       }),
     ]);
 
     const absentCount = totalEmployees - todayAttendance.length;
+    const notYetIn = Math.max(0, totalEmployees - todayAttendance.length);
 
     res.json({
       success: true,
       data: {
         totalEmployees,
+        activeEmployees: totalEmployees,
+        totalDepartments: departments.length,
         todayStats: {
           total: todayAttendance.length,
+          present: todayAttendance.length,
           onsite: todayAttendance.filter((r) => r.status === 'ON_SITE').length,
           wfh: todayAttendance.filter((r) => r.status === 'WFH').length,
           ob: todayAttendance.filter((r) => r.status === 'OB').length,
           absent: absentCount,
+          notYetIn,
         },
-        todayAttendance,
         pendingLeaves,
-        pendingCorrections,
-        departments,
+        pendingOvertimes: 0,
+        pendingConversions: 0,
+        departments: departments.map((d) => ({
+          id: d.id,
+          name: d.name,
+          count: d._count.employees,
+          presentToday: todayAttendance.filter((r) =>
+            (r.employee as any)?.department?.name === d.name
+          ).length,
+        })),
       },
     });
   } catch {
@@ -150,27 +170,59 @@ export async function hrDashboard(_req: AuthRequest, res: Response): Promise<voi
 export async function adminDashboard(_req: AuthRequest, res: Response): Promise<void> {
   try {
     const today = new Date();
-    const thisMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+    today.setHours(0, 0, 0, 0);
 
-    const [totalUsers, totalEmployees, totalDepts, todayClockIns, monthLeaves, monthOvertime, recentAudit] = await Promise.all([
+    const [totalUsers, activeUsers, totalDepartments, totalEmployees, todayAttendance, pendingLeaves, pendingOvertime, pendingCorrections, pendingConversions, recentAuditLogs] = await Promise.all([
+      prisma.user.count(),
       prisma.user.count({ where: { isActive: true } }),
-      prisma.employee.count({ where: { isActive: true } }),
       prisma.department.count({ where: { isActive: true } }),
-      prisma.attendanceRecord.count({ where: { date: today } }),
-      prisma.leaveRequest.count({ where: { createdAt: { gte: thisMonth } } }),
-      prisma.overtimeRecord.count({ where: { createdAt: { gte: thisMonth } } }),
+      prisma.employee.count({ where: { isActive: true, isArchived: false } }),
+      prisma.attendanceRecord.findMany({ where: { date: today } }),
+      prisma.leaveRequest.count({ where: { status: 'PENDING' } }),
+      prisma.overtimeRecord.count({ where: { status: 'PENDING' } }),
+      prisma.attendanceCorrection.count({ where: { status: 'PENDING' } }),
+      prisma.overtimeConversion.count({ where: { status: 'PENDING' } }),
       prisma.auditLog.findMany({
-        take: 20,
+        take: 10,
         orderBy: { createdAt: 'desc' },
-        include: { user: { select: { email: true } } },
+        include: {
+          user: {
+            include: { employee: { select: { firstName: true, lastName: true } } },
+          },
+        },
       }),
     ]);
+
+    const absentCount = totalEmployees - todayAttendance.length;
 
     res.json({
       success: true,
       data: {
-        stats: { totalUsers, totalEmployees, totalDepts, todayClockIns, monthLeaves, monthOvertime },
-        recentAudit,
+        totalUsers,
+        activeUsers,
+        totalDepartments,
+        todayAttendance: {
+          total: todayAttendance.length,
+          present: todayAttendance.length,
+          absent: absentCount,
+        },
+        pendingRequests: {
+          leaves: pendingLeaves,
+          overtime: pendingOvertime,
+          corrections: pendingCorrections,
+          conversions: pendingConversions,
+        },
+        recentAuditLogs: recentAuditLogs.map((log) => ({
+          id: log.id,
+          action: log.action,
+          entity: log.entity,
+          entityId: log.entityId,
+          createdAt: log.createdAt,
+          user: {
+            firstName: log.user?.employee?.firstName ?? log.user?.email?.split('@')[0] ?? 'System',
+            lastName: log.user?.employee?.lastName ?? '',
+          },
+        })),
       },
     });
   } catch {

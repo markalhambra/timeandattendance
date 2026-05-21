@@ -51,18 +51,30 @@ export interface Employee {
   id: string;
   userId: string;
   employeeNumber: string;
-  position?: string;
-  contactNumber?: string;
+  firstName: string;
+  lastName: string;
+  middleName?: string;
+  email: string;
+  mobile?: string;
+  designation?: string;
   address?: string;
   profilePicture?: string;
   dateHired?: string;
   departmentId?: string;
+  isActive: boolean;
   createdAt: string;
+  sssNumber?: string;
+  pagibigNumber?: string;
+  philhealthNumber?: string;
+  tinNumber?: string;
+  nickname?: string;
+  gender?: string;
+  birthday?: string;
+  emergencyContact?: string;
+  emergencyContactNumber?: string;
   department?: Department;
   user?: {
     id: string;
-    firstName: string;
-    lastName: string;
     email: string;
     role: Role;
     lastLogin?: string;
@@ -130,8 +142,12 @@ export interface LeaveRequest {
   totalDays: number;
   reason: string;
   status: ApprovalStatus;
-  deptHeadStatus?: ApprovalStatus;
-  hrStatus?: ApprovalStatus;
+  deptHeadStatus?: ApprovalStatus | null;
+  deptHeadNotes?: string | null;
+  deptHeadAt?: string | null;
+  hrStatus?: ApprovalStatus | null;
+  hrNotes?: string | null;
+  hrAt?: string | null;
   createdAt: string;
   employee?: Employee;
 }
@@ -146,7 +162,10 @@ export interface OvertimeRecord {
   endTime: string;
   minutes: number;
   reason?: string;
+  isFiled: boolean;
   status: ApprovalStatus;
+  reviewerNotes?: string | null;
+  reviewedAt?: string | null;
   pendingExpiry: string;
   approvedExpiry?: string;
   isConverted: boolean;
@@ -158,17 +177,20 @@ export interface OvertimeRecord {
 export interface OvertimeConversion {
   id: string;
   employeeId: string;
-  overtimeId?: string;
-  type: OvertimeConversionType;
-  conversionType?: OvertimeConversionType;
-  totalMinutes: number;
-  minutesToConvert?: number;
+  overtimeId: string;
+  conversionType: OvertimeConversionType;
+  minutesToConvert: number;
   status: ApprovalStatus;
-  scheduledDate: string;
-  isConverted?: boolean;
+  deptHeadStatus?: ApprovalStatus | null;
+  deptHeadAt?: string | null;
+  hrStatus?: ApprovalStatus | null;
+  hrAt?: string | null;
+  adminStatus?: string | null;
+  adminAt?: string | null;
+  reviewerNotes?: string | null;
+  scheduledDate?: string;
   createdAt: string;
   overtime?: OvertimeRecord;
-  overtimeIds?: string[];
   employee?: Employee;
 }
 

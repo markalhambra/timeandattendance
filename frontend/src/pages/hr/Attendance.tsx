@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import api from '../../services/api';
 import { AttendanceRecord, Department } from '../../types';
 import { format, parseISO, startOfMonth, endOfMonth } from 'date-fns';
+import toast from 'react-hot-toast';
 
 export default function HRAttendance() {
   const [month, setMonth] = useState(() => format(new Date(), 'yyyy-MM'));
@@ -25,9 +26,26 @@ export default function HRAttendance() {
     return <span className={`badge ${map[s || ''] || 'bg-gray-100 text-gray-500'}`}>{s || 'N/A'}</span>;
   };
 
-  const handleExport = () => {
-    const url = `/api/reports/attendance/export?startDate=${startDate}&endDate=${endDate}${deptFilter ? `&departmentId=${deptFilter}` : ''}`;
-    window.open(url, '_blank');
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handleExport = async () => {
+    setIsExporting(true);
+    try {
+      const res = await api.get(
+        `/reports/attendance/export?startDate=${startDate}&endDate=${endDate}${deptFilter ? `&departmentId=${deptFilter}` : ''}`,
+        { responseType: 'blob' },
+      );
+      const url = URL.createObjectURL(res.data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `attendance_${startDate}_to_${endDate}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.error('Failed to export attendance.');
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   return (
@@ -37,7 +55,9 @@ export default function HRAttendance() {
           <h1 className="text-2xl font-black">Attendance Records</h1>
           <p className="text-sm text-gray-500 mt-0.5">View all employee attendance</p>
         </div>
-        <button onClick={handleExport} className="btn-primary">Export XLSX</button>
+        <button onClick={handleExport} disabled={isExporting} className="btn-primary disabled:opacity-50">
+          {isExporting ? 'Exporting…' : 'Export XLSX'}
+        </button>
       </div>
 
       {/* Filters */}
@@ -64,7 +84,7 @@ export default function HRAttendance() {
                 !data?.length ? <tr><td colSpan={8} className="text-center text-sm text-gray-400 py-10">No records found</td></tr> :
                 data.map((r) => (
                   <tr key={r.id} className="hover:bg-gray-50">
-                    <td className="table-cell font-medium">{(r as any).employee?.user?.firstName} {(r as any).employee?.user?.lastName}</td>
+                    <td className="table-cell font-medium">{(r as any).employee?.firstName} {(r as any).employee?.lastName}</td>
                     <td className="table-cell">{format(parseISO(r.date), 'MMM d, EEE')}</td>
                     <td className="table-cell text-gray-500 text-xs">{(r as any).employee?.department?.name}</td>
                     <td className="table-cell">{r.clockIn ? format(parseISO(r.clockIn), 'hh:mm a') : '—'}</td>

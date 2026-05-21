@@ -22,6 +22,7 @@ const STATUS_COLORS: Record<string, string> = {
 export default function LeavePage() {
   const qc = useQueryClient();
   const [showModal, setShowModal] = useState(false);
+  const [viewLeave, setViewLeave] = useState<LeaveRequest | null>(null);
   const [form, setForm] = useState({ leaveType: 'SICK' as LeaveType, startDate: '', endDate: '', reason: '' });
 
   const { data: balances } = useQuery<LeaveBalance[]>({
@@ -53,6 +54,15 @@ export default function LeavePage() {
   });
 
   const leaveTypeLabel = (t: string) => LEAVE_TYPES.find((l) => l.value === t)?.label || t;
+
+  const getLeaveStage = (l: LeaveRequest): { label: string; color: string } => {
+    if (l.status === 'CANCELLED') return { label: 'Cancelled', color: 'bg-gray-100 text-gray-500' };
+    if (l.status === 'APPROVED') return { label: 'Approved', color: 'badge-approved' };
+    if (l.status === 'REJECTED') {
+      return { label: l.deptHeadStatus === 'REJECTED' ? 'Rejected by Dept Head' : 'Rejected by HR', color: 'badge-rejected' };
+    }
+    return { label: 'Pending', color: 'badge-pending' };
+  };
 
   return (
     <div className="space-y-6">
@@ -106,12 +116,17 @@ export default function LeavePage() {
                     <td className="table-cell">{format(parseISO(l.startDate), 'MMM d, yyyy')}</td>
                     <td className="table-cell">{format(parseISO(l.endDate), 'MMM d, yyyy')}</td>
                     <td className="table-cell">{l.totalDays}</td>
-                    <td className="table-cell"><span className={`badge ${STATUS_COLORS[l.status] || ''}`}>{l.status}</span></td>
+                    <td className="table-cell">
+                      <span className={`badge ${getLeaveStage(l).color}`}>{getLeaveStage(l).label}</span>
+                    </td>
                     <td className="table-cell text-gray-400">{format(parseISO(l.createdAt), 'MMM d')}</td>
                     <td className="table-cell">
-                      {l.status === 'PENDING' && (
-                        <button onClick={() => { if (confirm('Cancel this leave?')) cancelMutation.mutate(l.id); }} className="text-xs text-red-500 hover:text-red-700">Cancel</button>
-                      )}
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => setViewLeave(l)} className="text-xs text-blue-600 hover:text-blue-800">View</button>
+                        {l.status === 'PENDING' && (
+                          <button onClick={() => { if (confirm('Cancel this leave?')) cancelMutation.mutate(l.id); }} className="text-xs text-red-500 hover:text-red-700">Cancel</button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -120,6 +135,60 @@ export default function LeavePage() {
           </table>
         </div>
       </div>
+
+      {/* View Leave Details Modal */}
+      {viewLeave && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+          <div className="bg-white rounded-2xl shadow-modal w-full max-w-md p-6 animate-slide-in">
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <h3 className="font-bold text-base">{leaveTypeLabel(viewLeave.leaveType)}</h3>
+                <p className="text-sm text-gray-500 mt-0.5">
+                  {format(parseISO(viewLeave.startDate), 'MMM d')} – {format(parseISO(viewLeave.endDate), 'MMM d, yyyy')} · {viewLeave.totalDays} day{viewLeave.totalDays !== 1 ? 's' : ''}
+                </p>
+              </div>
+              <span className={`badge ${getLeaveStage(viewLeave).color}`}>{getLeaveStage(viewLeave).label}</span>
+            </div>
+            <div className="space-y-3 text-sm">
+              <div className="bg-gray-50 rounded-xl p-3">
+                <div className="text-xs text-gray-400 font-medium mb-1">Your Reason</div>
+                <div className="text-gray-700">{viewLeave.reason}</div>
+              </div>
+              {viewLeave.deptHeadStatus ? (
+                <div className={`rounded-xl p-3 ${viewLeave.deptHeadStatus === 'APPROVED' ? 'bg-green-50' : 'bg-red-50'}`}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className={`text-xs font-semibold ${viewLeave.deptHeadStatus === 'APPROVED' ? 'text-green-700' : 'text-red-700'}`}>
+                      Dept Head — {viewLeave.deptHeadStatus}
+                    </span>
+                    {viewLeave.deptHeadAt && <span className="text-xs text-gray-400">{format(parseISO(viewLeave.deptHeadAt), 'MMM d, yyyy')}</span>}
+                  </div>
+                  <div className="text-xs text-gray-600">{viewLeave.deptHeadNotes || 'No remarks.'}</div>
+                </div>
+              ) : (
+                <div className="bg-gray-50 rounded-xl p-3">
+                  <div className="text-xs text-gray-400 font-medium">Dept Head — Pending review</div>
+                </div>
+              )}
+              {viewLeave.hrStatus ? (
+                <div className={`rounded-xl p-3 ${viewLeave.hrStatus === 'APPROVED' ? 'bg-green-50' : 'bg-red-50'}`}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className={`text-xs font-semibold ${viewLeave.hrStatus === 'APPROVED' ? 'text-green-700' : 'text-red-700'}`}>
+                      HR — {viewLeave.hrStatus}
+                    </span>
+                    {viewLeave.hrAt && <span className="text-xs text-gray-400">{format(parseISO(viewLeave.hrAt), 'MMM d, yyyy')}</span>}
+                  </div>
+                  <div className="text-xs text-gray-600">{viewLeave.hrNotes || 'No remarks.'}</div>
+                </div>
+              ) : viewLeave.deptHeadStatus === 'APPROVED' ? (
+                <div className="bg-gray-50 rounded-xl p-3">
+                  <div className="text-xs text-gray-400 font-medium">HR — Pending review</div>
+                </div>
+              ) : null}
+            </div>
+            <button onClick={() => setViewLeave(null)} className="btn-secondary w-full mt-5">Close</button>
+          </div>
+        </div>
+      )}
 
       {/* File Leave Modal */}
       {showModal && (
