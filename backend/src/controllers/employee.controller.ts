@@ -269,6 +269,21 @@ export async function archiveEmployee(req: AuthRequest, res: Response): Promise<
   }
 }
 
+export async function restoreEmployee(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const employee = await prisma.employee.findUnique({ where: { id: req.params.id } });
+    if (!employee) { res.status(404).json({ success: false, message: 'Employee not found.' }); return; }
+    if (!employee.isArchived) { res.status(400).json({ success: false, message: 'Employee is not archived.' }); return; }
+    await Promise.all([
+      prisma.employee.update({ where: { id: req.params.id }, data: { isArchived: false, isActive: true, resignedAt: null } }),
+      prisma.user.update({ where: { id: employee.userId }, data: { isActive: true } }),
+    ]);
+    res.json({ success: true, message: 'Employee restored.' });
+  } catch {
+    res.status(500).json({ success: false, message: 'Failed to restore employee.' });
+  }
+}
+
 export async function adminResetPassword(req: AuthRequest, res: Response): Promise<void> {
   try {
     const { newPassword } = req.body;

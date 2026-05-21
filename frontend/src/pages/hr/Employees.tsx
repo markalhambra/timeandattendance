@@ -83,6 +83,16 @@ export default function HREmployees() {
     onError: (err: any) => toast.error(err?.response?.data?.message || 'Failed to archive.'),
   });
 
+  const restoreMutation = useMutation({
+    mutationFn: (id: string) => api.patch(`/employees/${id}/restore`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['hr-employees'] });
+      qc.invalidateQueries({ queryKey: ['hr-employees-archived'] });
+      toast.success('Employee restored.');
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.message || 'Failed to restore.'),
+  });
+
   const resetMutation = useMutation({
     mutationFn: ({ id, password }: { id: string; password: string }) => api.patch(`/employees/${id}/reset-password`, { newPassword: password }),
     onSuccess: (res) => {
@@ -208,13 +218,13 @@ export default function HREmployees() {
           {showArchived ? (
             <table className="w-full">
               <thead className="bg-gray-50 border-b border-gray-100">
-                <tr>{['Name', 'Emp. No.', 'Dept', 'Designation', 'Resigned On'].map((h) => <th key={h} className="table-header">{h}</th>)}</tr>
+                <tr>{['Name', 'Emp. No.', 'Dept', 'Designation', 'Resigned On', 'Actions'].map((h) => <th key={h} className="table-header">{h}</th>)}</tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {archivedLoading
-                  ? [...Array(3)].map((_, i) => <tr key={i}><td colSpan={5}><div className="h-10 bg-gray-100 m-2 rounded animate-pulse" /></td></tr>)
+                  ? [...Array(3)].map((_, i) => <tr key={i}><td colSpan={6}><div className="h-10 bg-gray-100 m-2 rounded animate-pulse" /></td></tr>)
                   : !archivedEmployees?.length
-                    ? <tr><td colSpan={5} className="text-center text-sm text-gray-400 py-10">No archived employees</td></tr>
+                    ? <tr><td colSpan={6} className="text-center text-sm text-gray-400 py-10">No archived employees</td></tr>
                     : archivedEmployees.map((e) => (
                       <tr key={e.id} className="hover:bg-gray-50 opacity-70">
                         <td className="table-cell">
@@ -225,6 +235,16 @@ export default function HREmployees() {
                         <td className="table-cell text-sm text-gray-500">{e.department?.name ?? '—'}</td>
                         <td className="table-cell text-sm text-gray-500">{e.designation ?? '—'}</td>
                         <td className="table-cell text-sm text-gray-500">{(e as any).resignedAt ? format(parseISO((e as any).resignedAt), 'MMM d, yyyy') : '—'}</td>
+                        <td className="table-cell">
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => { if (confirm(`Restore ${e.firstName} ${e.lastName}?`)) restoreMutation.mutate(e.id); }}
+                              className="border rounded px-2 py-1 text-xs text-green-700 hover:bg-green-50"
+                            >
+                              Restore
+                            </button>
+                          </div>
+                        </td>
                       </tr>
                     ))
                 }
@@ -258,11 +278,11 @@ export default function HREmployees() {
                       </td>
                       <td className="table-cell">
                         <div className="flex gap-2 flex-wrap">
-                          <button onClick={() => openEdit(e)} className="text-xs text-blue-600 hover:text-blue-800 underline">Edit</button>
-                          <button onClick={() => { if (confirm(`${e.isActive ? 'Deactivate' : 'Activate'} ${e.firstName}?`)) toggleMutation.mutate(e.id); }} className="text-xs text-gray-500 hover:text-black underline">{e.isActive ? 'Deactivate' : 'Activate'}</button>
-                          <button onClick={() => openResetPw(e)} className="text-xs text-gray-500 hover:text-black underline">Reset PW</button>
-                          <button onClick={() => { if (confirm(`Archive ${e.firstName} ${e.lastName} as resigned? They will no longer appear in reports or dashboards.`)) archiveMutation.mutate(e.id); }} className="text-xs text-orange-500 hover:text-orange-700 underline">Archive</button>
-                          <button onClick={() => confirmDelete(e)} className="text-xs text-red-500 hover:text-red-700 underline">Delete</button>
+                          <button onClick={() => openEdit(e)} className="border rounded px-2 py-1 text-xs">Edit</button>
+                          <button onClick={() => { if (confirm(`${e.isActive ? 'Deactivate' : 'Activate'} ${e.firstName}?`)) toggleMutation.mutate(e.id); }} className={`border rounded px-2 py-1 text-xs ${e.isActive ? 'text-gray-700' : 'text-green-700'}`}>{e.isActive ? 'Deactivate' : 'Activate'}</button>
+                          <button onClick={() => openResetPw(e)} className="border rounded px-2 py-1 text-xs">Reset PW</button>
+                          <button onClick={() => { if (confirm(`Archive ${e.firstName} ${e.lastName} as resigned? They will no longer appear in reports or dashboards.`)) archiveMutation.mutate(e.id); }} className="border rounded px-2 py-1 text-xs text-orange-600">Archive</button>
+                          <button onClick={() => confirmDelete(e)} className="border rounded px-2 py-1 text-xs text-red-600">Delete</button>
                         </div>
                       </td>
                     </tr>

@@ -54,6 +54,7 @@ employeeRoutes.put('/:id', authorize('HR', 'ADMIN'), auditLog('UPDATE', 'Employe
 employeeRoutes.delete('/:id', authorize('HR', 'ADMIN'), auditLog('DELETE', 'Employee'), employeeController.deleteEmployee);
 employeeRoutes.patch('/:id/toggle-active', authorize('ADMIN', 'HR'), auditLog('UPDATE', 'Employee'), employeeController.toggleActive);
 employeeRoutes.patch('/:id/archive', authorize('ADMIN', 'HR'), auditLog('UPDATE', 'Employee'), employeeController.archiveEmployee);
+employeeRoutes.patch('/:id/restore', authorize('ADMIN', 'HR'), auditLog('UPDATE', 'Employee'), employeeController.restoreEmployee);
 employeeRoutes.patch('/:id/reset-password', authorize('ADMIN', 'HR'), auditLog('PASSWORD_RESET', 'Employee'), employeeController.adminResetPassword);
 
 // Profile picture
