@@ -10,6 +10,12 @@ const LEAVE_TYPES: { value: LeaveType; label: string; desc: string }[] = [
   { value: 'VACATION', label: 'Vacation Leave', desc: 'For personal time off' },
   { value: 'PML', label: 'Pamilya Muna Leave', desc: 'For family-related matters' },
   { value: 'SML', label: 'Sarili Muna Leave', desc: 'For personal wellness' },
+  { value: 'EMERGENCY', label: 'Emergency Leave', desc: 'For urgent and unexpected situations' },
+  { value: 'SOLO_PARENT', label: 'Solo Parent Leave', desc: 'For qualified solo parents' },
+  { value: 'MATERNITY', label: 'Maternity Leave', desc: 'For childbirth and recovery' },
+  { value: 'PATERNITY', label: 'Paternity Leave', desc: 'For fathers after childbirth' },
+  { value: 'BEREAVEMENT', label: 'Bereavement Leave', desc: 'For the loss of a family member' },
+  { value: 'MAGNA_CARTA_WOMEN', label: 'Magna Carta for Women Leave', desc: 'For qualified benefits under the Magna Carta of Women' },
 ];
 
 const STATUS_COLORS: Record<string, string> = {

@@ -4,6 +4,31 @@ import { prisma } from '../config/database';
 import { ApprovalStatus, LeaveType } from '@prisma/client';
 import { notificationService } from '../services/notification.service';
 
+const LEAVE_BALANCE_DEFAULTS: Record<LeaveType, number> = {
+  SICK: 10,
+  VACATION: 15,
+  PML: 7,
+  SML: 3,
+  EMERGENCY: 3,
+  SOLO_PARENT: 7,
+  MATERNITY: 105,
+  PATERNITY: 7,
+  BEREAVEMENT: 5,
+  MAGNA_CARTA_WOMEN: 60,
+};
+
+const LEAVE_TYPES = Object.keys(LEAVE_BALANCE_DEFAULTS) as LeaveType[];
+
+async function ensureLeaveBalances(employeeId: string, year: number): Promise<void> {
+  await Promise.all(
+    LEAVE_TYPES.map((leaveType) => prisma.leaveBalance.upsert({
+      where: { employeeId_year_leaveType: { employeeId, year, leaveType } },
+      update: {},
+      create: { employeeId, year, leaveType, totalDays: LEAVE_BALANCE_DEFAULTS[leaveType] },
+    })),
+  );
+}
+
 export async function fileLeave(req: AuthRequest, res: Response): Promise<void> {
   const { leaveType, startDate, endDate, reason } = req.body;
   const employeeId = req.user!.employeeId;
@@ -15,6 +40,7 @@ export async function fileLeave(req: AuthRequest, res: Response): Promise<void> 
     const totalDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
 
     const year = start.getFullYear();
+    await ensureLeaveBalances(employeeId, year);
     const balance = await prisma.leaveBalance.findUnique({
       where: { employeeId_year_leaveType: { employeeId, year, leaveType: leaveType as LeaveType } },
     });
@@ -60,6 +86,7 @@ export async function getMyBalances(req: AuthRequest, res: Response): Promise<vo
   if (!employeeId) { res.status(400).json({ success: false, message: 'Employee not found.' }); return; }
   const year = parseInt((req.query.year as string) || String(new Date().getFullYear()));
   try {
+    await ensureLeaveBalances(employeeId, year);
     const balances = await prisma.leaveBalance.findMany({ where: { employeeId, year } });
     res.json({ success: true, data: balances });
   } catch {

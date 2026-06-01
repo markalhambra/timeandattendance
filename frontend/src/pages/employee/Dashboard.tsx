@@ -42,6 +42,12 @@ export default function EmployeeDashboard() {
     VACATION: 'Vacation',
     PML: 'Pamilya Muna',
     SML: 'Sarili Muna',
+    EMERGENCY: 'Emergency Leave',
+    SOLO_PARENT: 'Solo Parent Leave',
+    MATERNITY: 'Maternity Leave',
+    PATERNITY: 'Paternity Leave',
+    BEREAVEMENT: 'Bereavement Leave',
+    MAGNA_CARTA_WOMEN: 'Magna Carta for Women Leave',
   };
 
   const today = new Date().toLocaleDateString('en-PH', { timeZone: 'Asia/Manila', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });

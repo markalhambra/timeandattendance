@@ -34,6 +34,12 @@ enum LeaveType {
   VACATION
   PML
   SML
+  EMERGENCY
+  SOLO_PARENT
+  MATERNITY
+  PATERNITY
+  BEREAVEMENT
+  MAGNA_CARTA_WOMEN
 }
 
 enum ApprovalStatus {

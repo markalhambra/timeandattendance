@@ -20,7 +20,7 @@ export default function ApprovalsPage() {
 
   const invalidateAll = () => {
     ['dept-leaves', 'dept-overtime', 'dept-corrections', 'dept-conversions',
-     'dept-leaves-history', 'dept-overtime-all', 'dept-corrections-all'].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
+     'dept-leaves-history', 'dept-overtime-all', 'dept-corrections-all', 'my-attendance', 'my-corrections'].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
     qc.invalidateQueries({ queryKey: ['depthead-dashboard'] });
   };
 
@@ -73,7 +73,18 @@ export default function ApprovalsPage() {
     { key: 'conversions', label: 'OT Conversions', count: conversions?.length },
   ];
 
-  const leaveTypeLabel: Record<string, string> = { SICK: 'Sick', VACATION: 'Vacation', PML: 'Pamilya Muna', SML: 'Sarili Muna' };
+  const leaveTypeLabel: Record<string, string> = {
+    SICK: 'Sick',
+    VACATION: 'Vacation',
+    PML: 'Pamilya Muna',
+    SML: 'Sarili Muna',
+    EMERGENCY: 'Emergency Leave',
+    SOLO_PARENT: 'Solo Parent Leave',
+    MATERNITY: 'Maternity Leave',
+    PATERNITY: 'Paternity Leave',
+    BEREAVEMENT: 'Bereavement Leave',
+    MAGNA_CARTA_WOMEN: 'Magna Carta for Women Leave',
+  };
 
   const ActionButtons = ({ type, id, name }: { type: Tab; id: string; name: string }) => (
     <div className="flex gap-1.5">

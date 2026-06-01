@@ -58,7 +58,18 @@ export default function HRDashboard() {
     },
   });
 
-  const leaveTypeLabel: Record<string, string> = { SICK: 'Sick Leave', VACATION: 'Vacation', PML: 'Pamilya Muna', SML: 'Sarili Muna' };
+  const leaveTypeLabel: Record<string, string> = {
+    SICK: 'Sick Leave',
+    VACATION: 'Vacation',
+    PML: 'Pamilya Muna',
+    SML: 'Sarili Muna',
+    EMERGENCY: 'Emergency Leave',
+    SOLO_PARENT: 'Solo Parent Leave',
+    MATERNITY: 'Maternity Leave',
+    PATERNITY: 'Paternity Leave',
+    BEREAVEMENT: 'Bereavement Leave',
+    MAGNA_CARTA_WOMEN: 'Magna Carta for Women Leave',
+  };
 
   const allItems: any[] = [
     ...(schedLeaves ?? []).map((l: any) => ({
@@ -165,6 +176,12 @@ export default function HRDashboard() {
               <option value="VACATION">Vacation</option>
               <option value="PML">Pamilya Muna</option>
               <option value="SML">Sarili Muna</option>
+              <option value="EMERGENCY">Emergency Leave</option>
+              <option value="SOLO_PARENT">Solo Parent Leave</option>
+              <option value="MATERNITY">Maternity Leave</option>
+              <option value="PATERNITY">Paternity Leave</option>
+              <option value="BEREAVEMENT">Bereavement Leave</option>
+              <option value="MAGNA_CARTA_WOMEN">Magna Carta for Women Leave</option>
               <option value="CTO">CTO</option>
               <option value="CDO">CDO</option>
             </select>

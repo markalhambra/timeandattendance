@@ -124,7 +124,18 @@ export async function leaveReport(req: AuthRequest, res: Response): Promise<void
     }
     const chartData = Array.from(byDate.entries()).map(([date, count]) => ({ date, count })).sort((a, b) => a.date.localeCompare(b.date));
 
-    const leaveTypeLabel: Record<string, string> = { SICK: 'Sick Leave', VACATION: 'Vacation', PML: 'Pamilya Muna', SML: 'Sarili Muna' };
+    const leaveTypeLabel: Record<string, string> = {
+      SICK: 'Sick Leave',
+      VACATION: 'Vacation',
+      PML: 'Pamilya Muna',
+      SML: 'Sarili Muna',
+      EMERGENCY: 'Emergency Leave',
+      SOLO_PARENT: 'Solo Parent Leave',
+      MATERNITY: 'Maternity Leave',
+      PATERNITY: 'Paternity Leave',
+      BEREAVEMENT: 'Bereavement Leave',
+      MAGNA_CARTA_WOMEN: 'Magna Carta for Women Leave',
+    };
 
     const summary = leaves.map((l) => ({
       Employee: `${l.employee.firstName} ${l.employee.lastName}`,
@@ -253,11 +264,12 @@ export async function absenceReport(req: AuthRequest, res: Response): Promise<vo
 }
 
 export async function exportAttendance(req: AuthRequest, res: Response): Promise<void> {
-  const { startDate, endDate, departmentId, employeeId } = req.query as Record<string, string>;
+  const { startDate, endDate, departmentId, employeeId, status } = req.query as Record<string, string>;
   const { start, end } = parseDateRange(startDate, endDate);
 
   try {
     const where: any = { date: { gte: start, lte: end } };
+    if (status) where.status = status;
     if (employeeId) where.employeeId = employeeId;
     else if (departmentId) where.employee = { departmentId, isArchived: false };
     else where.employee = { isArchived: false };

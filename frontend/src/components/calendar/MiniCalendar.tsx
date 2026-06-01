@@ -28,6 +28,12 @@ const LEAVE_COLORS: Record<string, { bg: string; text: string; label: string }> 
   VACATION: { bg: 'bg-blue-100',   text: 'text-blue-700',   label: 'Vacation' },
   PML:      { bg: 'bg-green-100',  text: 'text-green-700',  label: 'Pamilya Muna' },
   SML:      { bg: 'bg-violet-100', text: 'text-violet-700', label: 'Sarili Muna' },
+  EMERGENCY: { bg: 'bg-orange-100', text: 'text-orange-700', label: 'Emergency Leave' },
+  SOLO_PARENT: { bg: 'bg-teal-100', text: 'text-teal-700', label: 'Solo Parent Leave' },
+  MATERNITY: { bg: 'bg-pink-100', text: 'text-pink-700', label: 'Maternity Leave' },
+  PATERNITY: { bg: 'bg-sky-100', text: 'text-sky-700', label: 'Paternity Leave' },
+  BEREAVEMENT: { bg: 'bg-slate-100', text: 'text-slate-700', label: 'Bereavement Leave' },
+  MAGNA_CARTA_WOMEN: { bg: 'bg-rose-100', text: 'text-rose-700', label: 'Magna Carta for Women Leave' },
 };
 const CONV_COLORS: Record<string, { bg: string; text: string; label: string }> = {
   CTO: { bg: 'bg-amber-100',  text: 'text-amber-700',  label: 'CTO' },

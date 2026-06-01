@@ -2,6 +2,31 @@ import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth.middleware';
 import { prisma } from '../config/database';
 
+const LEAVE_BALANCE_DEFAULTS = {
+  SICK: 10,
+  VACATION: 15,
+  PML: 7,
+  SML: 3,
+  EMERGENCY: 3,
+  SOLO_PARENT: 7,
+  MATERNITY: 105,
+  PATERNITY: 7,
+  BEREAVEMENT: 5,
+  MAGNA_CARTA_WOMEN: 60,
+} as const;
+
+const LEAVE_TYPES = Object.keys(LEAVE_BALANCE_DEFAULTS) as Array<keyof typeof LEAVE_BALANCE_DEFAULTS>;
+
+async function ensureLeaveBalances(employeeId: string, year: number): Promise<void> {
+  await Promise.all(
+    LEAVE_TYPES.map((leaveType) => prisma.leaveBalance.upsert({
+      where: { employeeId_year_leaveType: { employeeId, year, leaveType } },
+      update: {},
+      create: { employeeId, year, leaveType, totalDays: LEAVE_BALANCE_DEFAULTS[leaveType] },
+    })),
+  );
+}
+
 export async function employeeDashboard(req: AuthRequest, res: Response): Promise<void> {
   const employeeId = req.user!.employeeId;
   if (!employeeId) { res.status(400).json({ success: false, message: 'Employee not found.' }); return; }
@@ -13,6 +38,8 @@ export async function employeeDashboard(req: AuthRequest, res: Response): Promis
     const month = today.getMonth();
     const monthStart = new Date(year, month, 1);
     const monthEnd = new Date(year, month + 1, 0);
+
+    await ensureLeaveBalances(employeeId, year);
 
     const [todayRecord, monthRecords, leaveBalances, pendingLeaves, overtimeCredits, pendingCorrections] = await Promise.all([
       prisma.attendanceRecord.findUnique({ where: { employeeId_date: { employeeId, date: today } } }),

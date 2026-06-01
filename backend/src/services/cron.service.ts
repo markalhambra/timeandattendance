@@ -128,10 +128,21 @@ export function scheduleCronJobs(): void {
         select: { id: true },
       });
 
-      const defaults: Record<string, number> = { SICK: 10, VACATION: 15, PML: 7, SML: 3 };
+      const defaults: Record<string, number> = {
+        SICK: 10,
+        VACATION: 15,
+        PML: 7,
+        SML: 3,
+        EMERGENCY: 3,
+        SOLO_PARENT: 7,
+        MATERNITY: 105,
+        PATERNITY: 7,
+        BEREAVEMENT: 5,
+        MAGNA_CARTA_WOMEN: 60,
+      };
 
       for (const emp of employees) {
-        for (const leaveType of ['SICK', 'VACATION', 'PML', 'SML'] as const) {
+        for (const leaveType of ['SICK', 'VACATION', 'PML', 'SML', 'EMERGENCY', 'SOLO_PARENT', 'MATERNITY', 'PATERNITY', 'BEREAVEMENT', 'MAGNA_CARTA_WOMEN'] as const) {
           await prisma.leaveBalance.upsert({
             where: { employeeId_year_leaveType: { employeeId: emp.id, year, leaveType } },
             update: { totalDays: defaults[leaveType], usedDays: 0, pendingDays: 0 },
