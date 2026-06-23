@@ -2,6 +2,7 @@
   "name": "tams-frontend",
   "version": "1.0.0",
   "private": true,
+  "_buildTimestamp": "2026-06-23T02:40:00Z",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
