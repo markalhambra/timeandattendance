@@ -18,6 +18,16 @@ A production-ready, browser-based Time and Attendance Management System supporti
 
 ---
 
+## User Guidelines and Manual
+
+See `USER_MANUAL.md` for complete role-based usage guides for:
+- Employee
+- Department Head
+- HR
+- Admin
+
+---
+
 ## Tech Stack
 
 | Layer | Technology |

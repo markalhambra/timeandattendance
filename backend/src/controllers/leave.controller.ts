@@ -3,13 +3,14 @@ import { AuthRequest } from '../middleware/auth.middleware';
 import { prisma } from '../config/database';
 import { ApprovalStatus, LeaveType } from '@prisma/client';
 import { notificationService } from '../services/notification.service';
+import { phtYear, phtMonth } from '../utils/timezone';
 
 const LEAVE_BALANCE_DEFAULTS: Record<LeaveType, number> = {
-  SICK: 10,
+  SICK: 15,
   VACATION: 15,
   PML: 7,
   SML: 3,
-  EMERGENCY: 3,
+  EMERGENCY: 15,
   SOLO_PARENT: 7,
   MATERNITY: 105,
   PATERNITY: 7,
@@ -19,14 +20,23 @@ const LEAVE_BALANCE_DEFAULTS: Record<LeaveType, number> = {
 
 const LEAVE_TYPES = Object.keys(LEAVE_BALANCE_DEFAULTS) as LeaveType[];
 
+// SICK and EMERGENCY share one 15-day pool; all balance ops use the SICK row.
+function poolLeaveType(lt: LeaveType): LeaveType {
+  return lt === 'EMERGENCY' ? 'SICK' : lt;
+}
+
 async function ensureLeaveBalances(employeeId: string, year: number): Promise<void> {
-  await Promise.all(
-    LEAVE_TYPES.map((leaveType) => prisma.leaveBalance.upsert({
-      where: { employeeId_year_leaveType: { employeeId, year, leaveType } },
-      update: {},
-      create: { employeeId, year, leaveType, totalDays: LEAVE_BALANCE_DEFAULTS[leaveType] },
+  const existing = await prisma.leaveBalance.count({ where: { employeeId, year } });
+  if (existing >= LEAVE_TYPES.length) return;
+  await prisma.leaveBalance.createMany({
+    data: LEAVE_TYPES.map((leaveType) => ({
+      employeeId,
+      year,
+      leaveType,
+      totalDays: LEAVE_BALANCE_DEFAULTS[leaveType],
     })),
-  );
+    skipDuplicates: true,
+  });
 }
 
 export async function fileLeave(req: AuthRequest, res: Response): Promise<void> {
@@ -35,14 +45,29 @@ export async function fileLeave(req: AuthRequest, res: Response): Promise<void> 
   if (!employeeId) { res.status(400).json({ success: false, message: 'Employee not found.' }); return; }
 
   try {
+    // Enforce 6-month minimum tenure for EMPLOYEE role
+    if (req.user!.role === 'EMPLOYEE') {
+      const emp = await prisma.employee.findUnique({ where: { id: employeeId }, select: { dateHired: true } });
+      if (emp?.dateHired) {
+        const eligibleAt = new Date(emp.dateHired);
+        eligibleAt.setMonth(eligibleAt.getMonth() + 6);
+        if (new Date() < eligibleAt) {
+          const eligibleOn = eligibleAt.toISOString().split('T')[0];
+          res.status(403).json({ success: false, message: `Leave filing is available after 6 months of service. You will be eligible on ${eligibleOn}.` });
+          return;
+        }
+      }
+    }
+
     const start = new Date(startDate);
     const end = new Date(endDate);
     const totalDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
 
     const year = start.getFullYear();
     await ensureLeaveBalances(employeeId, year);
+    const poolType = poolLeaveType(leaveType as LeaveType);
     const balance = await prisma.leaveBalance.findUnique({
-      where: { employeeId_year_leaveType: { employeeId, year, leaveType: leaveType as LeaveType } },
+      where: { employeeId_year_leaveType: { employeeId, year, leaveType: poolType } },
     });
 
     if (!balance || (balance.totalDays - balance.usedDays - balance.pendingDays) < totalDays) {
@@ -55,7 +80,7 @@ export async function fileLeave(req: AuthRequest, res: Response): Promise<void> 
     });
 
     await prisma.leaveBalance.update({
-      where: { employeeId_year_leaveType: { employeeId, year, leaveType: leaveType as LeaveType } },
+      where: { employeeId_year_leaveType: { employeeId, year, leaveType: poolType } },
       data: { pendingDays: { increment: totalDays } },
     });
 
@@ -81,14 +106,25 @@ export async function getMyLeaves(req: AuthRequest, res: Response): Promise<void
   }
 }
 
+// SICK and EMERGENCY share one pool — mirror SICK values onto the EMERGENCY row
+function mirrorEmergencyBalance(balances: any[]): any[] {
+  const sick = balances.find((b) => b.leaveType === 'SICK');
+  if (!sick) return balances;
+  return balances.map((b) =>
+    b.leaveType === 'EMERGENCY'
+      ? { ...b, totalDays: sick.totalDays, usedDays: sick.usedDays, pendingDays: sick.pendingDays }
+      : b,
+  );
+}
+
 export async function getMyBalances(req: AuthRequest, res: Response): Promise<void> {
   const employeeId = req.user!.employeeId;
   if (!employeeId) { res.status(400).json({ success: false, message: 'Employee not found.' }); return; }
-  const year = parseInt((req.query.year as string) || String(new Date().getFullYear()));
+  const year = parseInt((req.query.year as string) || String(phtYear()));
   try {
     await ensureLeaveBalances(employeeId, year);
     const balances = await prisma.leaveBalance.findMany({ where: { employeeId, year } });
-    res.json({ success: true, data: balances });
+    res.json({ success: true, data: mirrorEmergencyBalance(balances) });
   } catch {
     res.status(500).json({ success: false, message: 'Failed to fetch balances.' });
   }
@@ -96,10 +132,10 @@ export async function getMyBalances(req: AuthRequest, res: Response): Promise<vo
 
 export async function getLeaveCalendar(req: AuthRequest, res: Response): Promise<void> {
   const { year, month, departmentId } = req.query as Record<string, string>;
-  const y = parseInt(year || String(new Date().getFullYear()));
-  const m = parseInt(month || String(new Date().getMonth() + 1));
-  const start = new Date(y, m - 1, 1);
-  const end = new Date(y, m, 0);
+  const y = parseInt(year || String(phtYear()));
+  const m = parseInt(month || String(phtMonth()));
+  const start = new Date(Date.UTC(y, m - 1, 1));
+  const end = new Date(Date.UTC(y, m, 0));
 
   try {
     const where: any = {
@@ -138,7 +174,7 @@ export async function cancelLeave(req: AuthRequest, res: Response): Promise<void
 
     const year = leave.startDate.getFullYear();
     await prisma.leaveBalance.update({
-      where: { employeeId_year_leaveType: { employeeId: employeeId!, year, leaveType: leave.leaveType } },
+      where: { employeeId_year_leaveType: { employeeId: employeeId!, year, leaveType: poolLeaveType(leave.leaveType) } },
       data: { pendingDays: { decrement: leave.totalDays } },
     });
 
@@ -243,7 +279,7 @@ export async function reviewLeave(req: AuthRequest, res: Response): Promise<void
         },
       });
       await prisma.leaveBalance.update({
-        where: { employeeId_year_leaveType: { employeeId: leave.employeeId, year, leaveType: leave.leaveType } },
+        where: { employeeId_year_leaveType: { employeeId: leave.employeeId, year, leaveType: poolLeaveType(leave.leaveType) } },
         data: { pendingDays: { decrement: leave.totalDays }, usedDays: { increment: leave.totalDays } },
       });
       await notificationService.notifyEmployee(leave.employeeId, 'APPROVAL_RESULT', { type: 'Leave Request', status, reviewer: role });
@@ -265,7 +301,7 @@ export async function reviewLeave(req: AuthRequest, res: Response): Promise<void
         },
       });
       await prisma.leaveBalance.update({
-        where: { employeeId_year_leaveType: { employeeId: leave.employeeId, year, leaveType: leave.leaveType } },
+        where: { employeeId_year_leaveType: { employeeId: leave.employeeId, year, leaveType: poolLeaveType(leave.leaveType) } },
         data: { pendingDays: { decrement: leave.totalDays } },
       });
       await notificationService.notifyEmployee(leave.employeeId, 'APPROVAL_RESULT', { type: 'Leave Request', status, reviewer: role });
@@ -289,12 +325,12 @@ export async function reviewLeave(req: AuthRequest, res: Response): Promise<void
 
     if (finalStatus === 'APPROVED') {
       await prisma.leaveBalance.update({
-        where: { employeeId_year_leaveType: { employeeId: leave.employeeId, year, leaveType: leave.leaveType } },
+        where: { employeeId_year_leaveType: { employeeId: leave.employeeId, year, leaveType: poolLeaveType(leave.leaveType) } },
         data: { pendingDays: { decrement: leave.totalDays }, usedDays: { increment: leave.totalDays } },
       });
     } else {
       await prisma.leaveBalance.update({
-        where: { employeeId_year_leaveType: { employeeId: leave.employeeId, year, leaveType: leave.leaveType } },
+        where: { employeeId_year_leaveType: { employeeId: leave.employeeId, year, leaveType: poolLeaveType(leave.leaveType) } },
         data: { pendingDays: { decrement: leave.totalDays } },
       });
     }

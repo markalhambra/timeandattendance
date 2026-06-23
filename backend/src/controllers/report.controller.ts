@@ -2,11 +2,12 @@ import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth.middleware';
 import { prisma } from '../config/database';
 import * as XLSX from 'xlsx';
+import { phtYear, phtMonth } from '../utils/timezone';
 
 const MAX_REPORT_DAYS = 92; // ~1 quarter; keeps Vercel function within 10s timeout
 
 function parseDateRange(startDate?: string, endDate?: string) {
-  const start = startDate ? new Date(startDate) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+  const start = startDate ? new Date(startDate) : new Date(Date.UTC(phtYear(), phtMonth() - 1, 1));
   const end = endDate ? new Date(endDate) : new Date();
   return { start, end };
 }

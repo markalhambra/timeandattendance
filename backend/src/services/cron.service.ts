@@ -2,14 +2,14 @@ import cron from 'node-cron';
 import { prisma } from '../config/database';
 import { notificationService } from './notification.service';
 import { logger } from '../config/logger';
+import { phtToday, phtYear } from '../utils/timezone';
 
 export function scheduleCronJobs(): void {
   // Mark absent employees at 2 PM Philippine Time (UTC+8 = 06:00 UTC)
   cron.schedule('0 6 * * 1-5', async () => {
     logger.info('Cron: Checking absent employees...');
     try {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+      const today = phtToday();
 
       const employees = await prisma.employee.findMany({
         where: { isActive: true },
@@ -35,7 +35,7 @@ export function scheduleCronJobs(): void {
     }
   }, { timezone: 'Asia/Manila' });
 
-  // Expire pending overtime credits (3 months) - runs daily at midnight
+  // Expire pending overtime credits (3 months) - runs daily at midnight PHT
   cron.schedule('0 0 * * *', async () => {
     logger.info('Cron: Expiring pending overtime credits...');
     try {
@@ -50,9 +50,9 @@ export function scheduleCronJobs(): void {
     } catch (err) {
       logger.error('Overtime expiry cron error:', err);
     }
-  });
+  }, { timezone: 'Asia/Manila' });
 
-  // Expire approved overtime credits (12 months) - runs daily at midnight
+  // Expire approved overtime credits (12 months) - runs daily at midnight PHT
   cron.schedule('1 0 * * *', async () => {
     logger.info('Cron: Expiring approved overtime credits...');
     try {
@@ -68,7 +68,7 @@ export function scheduleCronJobs(): void {
     } catch (err) {
       logger.error('Approved overtime expiry cron error:', err);
     }
-  });
+  }, { timezone: 'Asia/Manila' });
 
   // Send expiration alerts 7 days before - runs daily at 8 AM PHT
   cron.schedule('0 0 * * *', async () => {
@@ -102,7 +102,7 @@ export function scheduleCronJobs(): void {
 
   logger.info('✅ Cron jobs scheduled');
 
-  // Expire unfiled overtime records older than 15 days - runs daily at midnight
+  // Expire unfiled overtime records older than 15 days - runs daily at midnight PHT
   cron.schedule('2 0 * * *', async () => {
     logger.info('Cron: Expiring unfiled overtime records (15-day window)...');
     try {
@@ -116,13 +116,13 @@ export function scheduleCronJobs(): void {
     } catch (err) {
       logger.error('Unfiled OT expiry cron error:', err);
     }
-  });
+  }, { timezone: 'Asia/Manila' });
 
   // Reset all leave balances for all active employees every January 1 at midnight PHT
   cron.schedule('0 0 1 1 *', async () => {
     logger.info('Cron: Resetting all leave balances for new year...');
     try {
-      const year = new Date().getFullYear();
+      const year = phtYear();
       const employees = await prisma.employee.findMany({
         where: { isActive: true },
         select: { id: true },

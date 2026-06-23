@@ -4,12 +4,14 @@ import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 import { Notification } from '../../types';
 import { formatDistanceToNow } from 'date-fns';
+import HelpModal from '../common/HelpModal';
 
 interface Props { onMenuClick: () => void; }
 
 export default function Header({ onMenuClick }: Props) {
   const { user } = useAuth();
   const [showNotifs, setShowNotifs] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
 
   const { data: countData } = useQuery({
     queryKey: ['unread-count'],
@@ -94,6 +96,17 @@ export default function Header({ onMenuClick }: Props) {
           )}
         </div>
 
+        {/* Help button */}
+        <div>
+          <button
+            onClick={() => setShowHelp(true)}
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            aria-label="Help"
+          >
+            <div className="w-8 h-8 bg-gray-100 text-black rounded-full flex items-center justify-center text-xs font-bold">?</div>
+          </button>
+        </div>
+
         {/* User badge */}
         <div className="flex items-center gap-2 pl-2 border-l border-gray-200">
           <div className="hidden md:block text-right">
@@ -114,6 +127,7 @@ export default function Header({ onMenuClick }: Props) {
 
       {/* Click outside to close */}
       {showNotifs && <div className="fixed inset-0 z-40" onClick={() => setShowNotifs(false)} />}
+      {showHelp && <HelpModal open={showHelp} onClose={() => setShowHelp(false)} />}
     </header>
   );
 }

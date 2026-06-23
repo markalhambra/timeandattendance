@@ -9,11 +9,13 @@ declare global {
 export const prisma: PrismaClient =
   global.__prisma ??
   new PrismaClient({
-    log: [
-      { emit: 'event', level: 'query' },
-      { emit: 'event', level: 'error' },
-      { emit: 'event', level: 'warn' },
-    ],
+    log: process.env.NODE_ENV === 'production'
+      ? [{ emit: 'event', level: 'error' }]
+      : [
+          { emit: 'event', level: 'query' },
+          { emit: 'event', level: 'error' },
+          { emit: 'event', level: 'warn' },
+        ],
   });
 
 if (process.env.NODE_ENV !== 'production') {

@@ -19,9 +19,13 @@ export async function getDepartments(_req: AuthRequest, res: Response): Promise<
 }
 
 export async function createDepartment(req: AuthRequest, res: Response): Promise<void> {
-  const { name, code, description } = req.body;
+  const { name, description } = req.body;
+  // Auto-generate code from name: take first letters of each word, uppercase, max 8 chars
+  const rawCode = (req.body.code as string | undefined)?.trim()
+    || name.split(/[\s\-\/]+/).map((w: string) => w[0]).join('').toUpperCase().slice(0, 8);
+  const code = rawCode.toUpperCase();
   try {
-    const dept = await prisma.department.create({ data: { name, code: code.toUpperCase(), description } });
+    const dept = await prisma.department.create({ data: { name, code, description } });
     res.status(201).json({ success: true, data: dept });
   } catch (err: any) {
     if (err.code === 'P2002') {
@@ -33,11 +37,12 @@ export async function createDepartment(req: AuthRequest, res: Response): Promise
 }
 
 export async function updateDepartment(req: AuthRequest, res: Response): Promise<void> {
-  const { name, code, description } = req.body;
+  const { name, description } = req.body;
+  const code = (req.body.code as string | undefined)?.trim().toUpperCase() || undefined;
   try {
     const dept = await prisma.department.update({
       where: { id: req.params.id },
-      data: { name, code: code?.toUpperCase(), description },
+      data: { name, ...(code ? { code } : {}), description },
     });
     res.json({ success: true, data: dept });
   } catch {

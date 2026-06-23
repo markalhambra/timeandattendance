@@ -6,8 +6,8 @@ import { GeoLocation, AttendanceRecord, AttendanceStatus } from '../../types';
 import toast from 'react-hot-toast';
 import { format, parseISO } from 'date-fns';
 
-const OFFICE_LAT = parseFloat(import.meta.env.VITE_OFFICE_LAT || '14.5995');
-const OFFICE_LNG = parseFloat(import.meta.env.VITE_OFFICE_LNG || '120.9842');
+const OFFICE_LAT = parseFloat(import.meta.env.VITE_OFFICE_LAT || '14.583889');
+const OFFICE_LNG = parseFloat(import.meta.env.VITE_OFFICE_LNG || '121.062778');
 const OFFICE_RADIUS = parseFloat(import.meta.env.VITE_OFFICE_RADIUS || '200');
 
 function haversine(lat1: number, lng1: number, lat2: number, lng2: number) {
@@ -45,6 +45,22 @@ export default function ClockWidget() {
   const today = todayData?.data ?? null;
   const missedClockOut = todayData?.missedClockOut ?? null;
   const navigate = useNavigate();
+
+  // Pre-fetch GPS on mount so location is ready when user clicks
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+    setGeoLoading(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const loc = { latitude: pos.coords.latitude, longitude: pos.coords.longitude, accuracy: pos.coords.accuracy };
+        setGeo(loc);
+        setDistance(Math.round(haversine(loc.latitude, loc.longitude, OFFICE_LAT, OFFICE_LNG)));
+        setGeoLoading(false);
+      },
+      () => { setGeoLoading(false); },
+      { enableHighAccuracy: true, timeout: 15000 },
+    );
+  }, []);
 
   // Live working timer
   useEffect(() => {

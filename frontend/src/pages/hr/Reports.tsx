@@ -16,6 +16,7 @@ export default function ReportsPage() {
   const [endDate, setEndDate] = useState(today);
   const [deptFilter, setDeptFilter] = useState('');
   const [employeeFilter, setEmployeeFilter] = useState('');
+  const [workTypeFilter, setWorkTypeFilter] = useState('');
   const [exporting, setExporting] = useState(false);
 
   const { data: depts } = useQuery<Department[]>({ queryKey: ['departments'], queryFn: () => api.get('/departments').then((r) => r.data.data) });
@@ -25,8 +26,14 @@ export default function ReportsPage() {
   });
 
   const { data: reportData, isLoading } = useQuery({
-    queryKey: ['report', reportType, startDate, endDate, deptFilter, employeeFilter],
-    queryFn: () => api.get(`/reports/${reportType}?startDate=${startDate}&endDate=${endDate}${employeeFilter ? `&employeeId=${employeeFilter}` : deptFilter ? `&departmentId=${deptFilter}` : ''}`).then((r) => r.data.data),
+    queryKey: ['report', reportType, startDate, endDate, deptFilter, employeeFilter, workTypeFilter],
+    queryFn: () => {
+      let url = `/reports/${reportType}?startDate=${startDate}&endDate=${endDate}`;
+      if (employeeFilter) url += `&employeeId=${employeeFilter}`;
+      else if (deptFilter) url += `&departmentId=${deptFilter}`;
+      if (reportType === 'attendance' && workTypeFilter) url += `&status=${workTypeFilter}`;
+      return api.get(url).then((r) => r.data.data);
+    },
   });
 
   const reportTypes: { key: ReportType; label: string }[] = [
@@ -42,10 +49,11 @@ export default function ReportsPage() {
       setExporting(true);
       if (reportType === 'attendance') {
         // Use dedicated XLSX endpoint (sends auth header via api instance)
-        const resp = await api.get(
-          `/reports/attendance/export?startDate=${startDate}&endDate=${endDate}${employeeFilter ? `&employeeId=${employeeFilter}` : deptFilter ? `&departmentId=${deptFilter}` : ''}`,
-          { responseType: 'blob' },
-        );
+        let endpoint = `/reports/attendance/export?startDate=${startDate}&endDate=${endDate}`;
+        if (employeeFilter) endpoint += `&employeeId=${employeeFilter}`;
+        else if (deptFilter) endpoint += `&departmentId=${deptFilter}`;
+        if (workTypeFilter) endpoint += `&status=${workTypeFilter}`;
+        const resp = await api.get(endpoint, { responseType: 'blob' });
         const url = URL.createObjectURL(resp.data);
         const a = document.createElement('a');
         a.href = url;
@@ -81,7 +89,7 @@ export default function ReportsPage() {
       <div className="flex gap-3 flex-wrap">
         <div className="flex gap-1 bg-gray-100 rounded-xl p-1">
           {reportTypes.map((t) => (
-            <button key={t.key} onClick={() => setReportType(t.key)} className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${reportType === t.key ? 'bg-white shadow-sm text-black' : 'text-gray-500 hover:text-black'}`}>
+            <button key={t.key} onClick={() => { setReportType(t.key); if (t.key !== 'attendance') setWorkTypeFilter(''); }} className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${reportType === t.key ? 'bg-white shadow-sm text-black' : 'text-gray-500 hover:text-black'}`}>
               {t.label}
             </button>
           ))}
@@ -100,6 +108,14 @@ export default function ReportsPage() {
           <option value="">All Employees</option>
           {employees?.map((e) => <option key={e.id} value={e.id}>{e.lastName}, {e.firstName}</option>)}
         </select>
+        {reportType === 'attendance' && (
+          <select value={workTypeFilter} onChange={(e) => setWorkTypeFilter(e.target.value)} className="input w-auto text-sm">
+            <option value="">All Work Types</option>
+            <option value="ON_SITE">On-Site</option>
+            <option value="WFH">WFH</option>
+            <option value="OB">Official Business</option>
+          </select>
+        )}
       </div>
 
       {/* Chart */}

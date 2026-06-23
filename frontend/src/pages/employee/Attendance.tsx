@@ -27,6 +27,16 @@ export default function AttendancePage() {
     onError: (err: any) => toast.error(err?.response?.data?.message || 'Failed to submit.'),
   });
 
+  function localToISOString(s?: string) {
+    if (!s) return undefined;
+    const m = s.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/);
+    if (m) {
+      const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]), Number(m[5]));
+      return d.toISOString();
+    }
+    return new Date(s).toISOString();
+  }
+
   const statusBadge = (s?: string) => {
     const map: Record<string, string> = { ON_SITE: 'badge-onsite', WFH: 'badge-wfh', OB: 'badge-ob', ABSENT: 'badge-absent' };
     return <span className={`badge ${map[s || ''] || 'bg-gray-100 text-gray-500'}`}>{s || 'N/A'}</span>;
@@ -34,9 +44,16 @@ export default function AttendancePage() {
 
   const openCorrection = (r: AttendanceRecord) => {
     setSelectedRecord(r);
+    // Always anchor times to the attendance record's date so the user can't
+    // accidentally pick tomorrow's date (which would inflate overtime by 24h).
+    const dateStr = format(parseISO(r.date), "yyyy-MM-dd");
     setCorrectionForm({
-      requestedClockIn: r.clockIn ? format(parseISO(r.clockIn), "yyyy-MM-dd'T'HH:mm") : '',
-      requestedClockOut: r.clockOut ? format(parseISO(r.clockOut), "yyyy-MM-dd'T'HH:mm") : '',
+      requestedClockIn: r.clockIn
+        ? format(parseISO(r.clockIn), "yyyy-MM-dd'T'HH:mm")
+        : `${dateStr}T08:00`,
+      requestedClockOut: r.clockOut
+        ? format(parseISO(r.clockOut), "yyyy-MM-dd'T'HH:mm")
+        : `${dateStr}T17:00`,
       reason: '',
     });
     setShowCorrectionModal(true);
@@ -125,6 +142,8 @@ export default function AttendancePage() {
                 <input
                   type="datetime-local"
                   value={correctionForm.requestedClockIn}
+                  min={`${format(parseISO(selectedRecord.date), "yyyy-MM-dd")}T00:00`}
+                  max={`${format(parseISO(selectedRecord.date), "yyyy-MM-dd")}T23:59`}
                   onChange={(e) => setCorrectionForm((f) => ({ ...f, requestedClockIn: e.target.value }))}
                   className="input"
                 />
@@ -134,6 +153,8 @@ export default function AttendancePage() {
                 <input
                   type="datetime-local"
                   value={correctionForm.requestedClockOut}
+                  min={`${format(parseISO(selectedRecord.date), "yyyy-MM-dd")}T00:00`}
+                  max={`${format(parseISO(selectedRecord.date), "yyyy-MM-dd")}T23:59`}
                   onChange={(e) => setCorrectionForm((f) => ({ ...f, requestedClockOut: e.target.value }))}
                   className="input"
                 />
@@ -154,8 +175,8 @@ export default function AttendancePage() {
               <button
                 onClick={() => correctionMutation.mutate({
                   attendanceId: selectedRecord.id,
-                  requestedClockIn: correctionForm.requestedClockIn || undefined,
-                  requestedClockOut: correctionForm.requestedClockOut || undefined,
+                  requestedClockIn: correctionForm.requestedClockIn ? localToISOString(correctionForm.requestedClockIn) : undefined,
+                  requestedClockOut: correctionForm.requestedClockOut ? localToISOString(correctionForm.requestedClockOut) : undefined,
                   reason: correctionForm.reason,
                 })}
                 disabled={!correctionForm.reason || correctionMutation.isPending}

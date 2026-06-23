@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { prisma } from '../config/database';
 import { notificationService } from '../services/notification.service';
 import { logger } from '../config/logger';
+import { phtToday, phtYear } from '../utils/timezone';
 
 /**
  * Vercel cron jobs call these endpoints via HTTP GET with an Authorization header.
@@ -27,8 +28,8 @@ function verifyCronAuth(req: Request, res: Response): boolean {
 export async function cronAbsentCheck(req: Request, res: Response): Promise<void> {
   if (!verifyCronAuth(req, res)) return;
   try {
-    const today = new Date();
-    const dayOfWeek = today.getDay(); // 0 = Sunday, 6 = Saturday
+    const today = phtToday();
+    const dayOfWeek = today.getUTCDay(); // 0 = Sunday, 6 = Saturday (stored as midnight UTC of PHT date)
     const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
 
     if (isWeekend) {
@@ -39,7 +40,7 @@ export async function cronAbsentCheck(req: Request, res: Response): Promise<void
       return;
     }
 
-    today.setHours(0, 0, 0, 0);
+    today.setUTCHours(0, 0, 0, 0); // already at midnight UTC from phtToday()
     const employees = await prisma.employee.findMany({
       where: { isActive: true, isArchived: false },
       include: {

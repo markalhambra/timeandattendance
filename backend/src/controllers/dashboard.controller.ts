@@ -1,13 +1,15 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth.middleware';
 import { prisma } from '../config/database';
+import { phtToday, phtYear, phtMonth, phtMonthBounds } from '../utils/timezone';
+import { logger } from '../config/logger';
 
 const LEAVE_BALANCE_DEFAULTS = {
-  SICK: 10,
+  SICK: 15,
   VACATION: 15,
   PML: 7,
   SML: 3,
-  EMERGENCY: 3,
+  EMERGENCY: 15,
   SOLO_PARENT: 7,
   MATERNITY: 105,
   PATERNITY: 7,
@@ -17,14 +19,31 @@ const LEAVE_BALANCE_DEFAULTS = {
 
 const LEAVE_TYPES = Object.keys(LEAVE_BALANCE_DEFAULTS) as Array<keyof typeof LEAVE_BALANCE_DEFAULTS>;
 
-async function ensureLeaveBalances(employeeId: string, year: number): Promise<void> {
-  await Promise.all(
-    LEAVE_TYPES.map((leaveType) => prisma.leaveBalance.upsert({
-      where: { employeeId_year_leaveType: { employeeId, year, leaveType } },
-      update: {},
-      create: { employeeId, year, leaveType, totalDays: LEAVE_BALANCE_DEFAULTS[leaveType] },
-    })),
+// SICK and EMERGENCY share one pool — mirror SICK values onto the EMERGENCY row
+function mirrorEmergencyBalance(balances: any[]): any[] {
+  const sick = balances.find((b: any) => b.leaveType === 'SICK');
+  if (!sick) return balances;
+  return balances.map((b: any) =>
+    b.leaveType === 'EMERGENCY'
+      ? { ...b, totalDays: sick.totalDays, usedDays: sick.usedDays, pendingDays: sick.pendingDays }
+      : b,
   );
+}
+
+async function ensureLeaveBalances(employeeId: string, year: number): Promise<void> {
+  // Check if all balances exist before running createMany
+  const existing = await prisma.leaveBalance.count({ where: { employeeId, year } });
+  if (existing >= LEAVE_TYPES.length) return; // already initialized
+  // Use createMany with skipDuplicates — single query, safe with connection_limit=1
+  await prisma.leaveBalance.createMany({
+    data: LEAVE_TYPES.map((leaveType) => ({
+      employeeId,
+      year,
+      leaveType,
+      totalDays: LEAVE_BALANCE_DEFAULTS[leaveType],
+    })),
+    skipDuplicates: true,
+  });
 }
 
 export async function employeeDashboard(req: AuthRequest, res: Response): Promise<void> {
@@ -32,12 +51,10 @@ export async function employeeDashboard(req: AuthRequest, res: Response): Promis
   if (!employeeId) { res.status(400).json({ success: false, message: 'Employee not found.' }); return; }
 
   try {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const year = today.getFullYear();
-    const month = today.getMonth();
-    const monthStart = new Date(year, month, 1);
-    const monthEnd = new Date(year, month + 1, 0);
+    const today = phtToday();
+    const year = phtYear();
+    const month = phtMonth();
+    const [monthStart, monthEnd] = phtMonthBounds(year, month);
 
     await ensureLeaveBalances(employeeId, year);
 
@@ -72,13 +89,14 @@ export async function employeeDashboard(req: AuthRequest, res: Response): Promis
       data: {
         todayRecord,
         monthlySummary,
-        leaveBalances,
+        leaveBalances: mirrorEmergencyBalance(leaveBalances),
         pendingLeaves,
         overtimeCredit,
         pendingCorrections,
       },
     });
-  } catch {
+  } catch (err: any) {
+    logger.error('employeeDashboard error:', err?.message, err?.code);
     res.status(500).json({ success: false, message: 'Failed to load dashboard.' });
   }
 }
@@ -92,8 +110,7 @@ export async function deptHeadDashboard(req: AuthRequest, res: Response): Promis
     }
     const deptId = dept.id;
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const today = phtToday();
 
     const where = { departmentId: deptId, isActive: true, isArchived: false };
 
@@ -134,8 +151,7 @@ export async function deptHeadDashboard(req: AuthRequest, res: Response): Promis
 
 export async function hrDashboard(_req: AuthRequest, res: Response): Promise<void> {
   try {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const today = phtToday();
 
     const [totalEmployees, todayAttendance, pendingLeaves, pendingCorrections, departments] = await Promise.all([
       prisma.employee.count({ where: { isActive: true, isArchived: false } }),
@@ -196,8 +212,7 @@ export async function hrDashboard(_req: AuthRequest, res: Response): Promise<voi
 
 export async function adminDashboard(_req: AuthRequest, res: Response): Promise<void> {
   try {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const today = phtToday();
 
     const [totalUsers, activeUsers, totalDepartments, totalEmployees, todayAttendance, pendingLeaves, pendingOvertime, pendingCorrections, pendingConversions, recentAuditLogs] = await Promise.all([
       prisma.user.count(),

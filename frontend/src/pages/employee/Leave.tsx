@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../services/api';
-import { LeaveBalance, LeaveRequest, LeaveType } from '../../types';
-import { format, parseISO } from 'date-fns';
+import { useAuth } from '../../contexts/AuthContext';
+import { LeaveBalance, LeaveRequest, LeaveType, Employee } from '../../types';
+import { format, parseISO, addMonths } from 'date-fns';
 import toast from 'react-hot-toast';
 
 const LEAVE_TYPES: { value: LeaveType; label: string; desc: string }[] = [
@@ -26,10 +27,20 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export default function LeavePage() {
+  const { user } = useAuth();
   const qc = useQueryClient();
   const [showModal, setShowModal] = useState(false);
   const [viewLeave, setViewLeave] = useState<LeaveRequest | null>(null);
   const [form, setForm] = useState({ leaveType: 'SICK' as LeaveType, startDate: '', endDate: '', reason: '' });
+
+  const { data: myProfile } = useQuery<Employee>({
+    queryKey: ['my-profile'],
+    queryFn: () => api.get('/employees/me').then((r) => r.data.data),
+  });
+
+  const sixMonthDate = myProfile?.dateHired ? addMonths(parseISO(myProfile.dateHired), 6) : null;
+  const isBelowSixMonths = sixMonthDate ? new Date() < sixMonthDate : false;
+  const eligibleOn = sixMonthDate ? format(sixMonthDate, 'MMMM d, yyyy') : null;
 
   const { data: balances } = useQuery<LeaveBalance[]>({
     queryKey: ['leave-balances'],
@@ -77,8 +88,28 @@ export default function LeavePage() {
           <h1 className="text-2xl font-black">Leave Management</h1>
           <p className="text-sm text-gray-500 mt-0.5">File and track your leave requests</p>
         </div>
-        <button onClick={() => setShowModal(true)} className="btn-primary">+ File Leave</button>
+        <button
+          onClick={() => setShowModal(true)}
+          disabled={isBelowSixMonths}
+          title={isBelowSixMonths && eligibleOn ? `Leave filing is available after 6 months of service. Eligible on ${eligibleOn}.` : undefined}
+          className={`btn-primary ${isBelowSixMonths ? 'opacity-50 cursor-not-allowed' : ''}`}
+        >
+          + File Leave
+        </button>
       </div>
+
+      {isBelowSixMonths && (
+        <div className="card p-4 bg-amber-50 border border-amber-200 flex items-start gap-3">
+          <span className="text-amber-500 text-lg leading-none mt-0.5">⚠</span>
+          <div>
+            <p className="text-sm font-semibold text-amber-800">Leave filing not yet available</p>
+            <p className="text-xs text-amber-700 mt-0.5">
+              Employees must complete 6 months of service before filing leaves.
+              {eligibleOn ? ` You will be eligible on ${eligibleOn}.` : ''}
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Leave balances */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -227,7 +258,7 @@ export default function LeavePage() {
               <button onClick={() => setShowModal(false)} className="btn-secondary flex-1">Cancel</button>
               <button
                 onClick={() => fileMutation.mutate(form)}
-                disabled={!form.startDate || !form.endDate || !form.reason || fileMutation.isPending}
+                disabled={isBelowSixMonths || !form.startDate || !form.endDate || !form.reason || fileMutation.isPending}
                 className="btn-primary flex-1"
               >
                 {fileMutation.isPending ? 'Filing...' : 'File Leave'}

@@ -20,7 +20,6 @@ import { reportRoutes } from './routes/report.routes';
 import { notificationRoutes } from './routes/notification.routes';
 import { dashboardRoutes } from './routes/dashboard.routes';
 import { auditRoutes } from './routes/audit.routes';
-import { scheduleCronJobs } from './services/cron.service';
 import { cronRoutes } from './routes/cron.routes';
 
 const app = express();
@@ -64,7 +63,8 @@ app.use(cookieParser());
 app.use(compression());
 
 // ─── Logging ──────────────────────────────────────────────────────────────
-app.use(morgan('combined', {
+// Use compact format in production to reduce log volume and execution time.
+app.use(morgan(process.env.NODE_ENV === 'production' ? 'short' : 'combined', {
   stream: { write: (msg) => logger.http(msg.trim()) },
 }));
 
@@ -116,8 +116,10 @@ app.use((err: any, _req: express.Request, res: express.Response, _next: express.
 });
 
 // ─── Start Server ─────────────────────────────────────────────────────────
-// Only bind to a port when running directly (not in Vercel serverless)
+// Only bind to a port when running directly (not in Vercel serverless).
+// node-cron is not imported here — Vercel cron jobs call HTTP endpoints instead.
 if (process.env.VERCEL !== '1') {
+  const { scheduleCronJobs } = require('./services/cron.service');
   app.listen(PORT, () => {
     logger.info(`🚀 TAMS Backend running on port ${PORT}`);
     logger.info(`   Environment: ${process.env.NODE_ENV || 'development'}`);

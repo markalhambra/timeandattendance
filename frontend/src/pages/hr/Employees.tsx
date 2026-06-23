@@ -236,13 +236,9 @@ export default function HREmployees() {
                         <td className="table-cell text-sm text-gray-500">{e.designation ?? '—'}</td>
                         <td className="table-cell text-sm text-gray-500">{(e as any).resignedAt ? format(parseISO((e as any).resignedAt), 'MMM d, yyyy') : '—'}</td>
                         <td className="table-cell">
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => { if (confirm(`Restore ${e.firstName} ${e.lastName}?`)) restoreMutation.mutate(e.id); }}
-                              className="border rounded px-2 py-1 text-xs text-green-700 hover:bg-green-50"
-                            >
-                              Restore
-                            </button>
+                          <div className="flex gap-1.5 flex-wrap">
+                            <button onClick={() => { if (confirm(`Restore ${e.firstName} ${e.lastName}? They will be set as active again.`)) restoreMutation.mutate(e.id); }} className="px-2.5 py-1 text-xs font-medium rounded-lg border border-green-200 text-green-700 hover:bg-green-50 transition-colors">Restore</button>
+                            <button onClick={() => confirmDelete(e)} className="px-2.5 py-1 text-xs font-medium rounded-lg border border-red-200 text-red-600 hover:bg-red-50 transition-colors">Delete</button>
                           </div>
                         </td>
                       </tr>
@@ -277,12 +273,12 @@ export default function HREmployees() {
                         </span>
                       </td>
                       <td className="table-cell">
-                        <div className="flex gap-2 flex-wrap">
-                          <button onClick={() => openEdit(e)} className="border rounded px-2 py-1 text-xs">Edit</button>
-                          <button onClick={() => { if (confirm(`${e.isActive ? 'Deactivate' : 'Activate'} ${e.firstName}?`)) toggleMutation.mutate(e.id); }} className={`border rounded px-2 py-1 text-xs ${e.isActive ? 'text-gray-700' : 'text-green-700'}`}>{e.isActive ? 'Deactivate' : 'Activate'}</button>
-                          <button onClick={() => openResetPw(e)} className="border rounded px-2 py-1 text-xs">Reset PW</button>
-                          <button onClick={() => { if (confirm(`Archive ${e.firstName} ${e.lastName} as resigned? They will no longer appear in reports or dashboards.`)) archiveMutation.mutate(e.id); }} className="border rounded px-2 py-1 text-xs text-orange-600">Archive</button>
-                          <button onClick={() => confirmDelete(e)} className="border rounded px-2 py-1 text-xs text-red-600">Delete</button>
+                        <div className="flex gap-1.5 flex-wrap">
+                          <button onClick={() => openEdit(e)} className="px-2.5 py-1 text-xs font-medium rounded-lg border border-blue-200 text-blue-700 hover:bg-blue-50 transition-colors">Edit</button>
+                          <button onClick={() => { if (confirm(`${e.isActive ? 'Deactivate' : 'Activate'} ${e.firstName}?`)) toggleMutation.mutate(e.id); }} className="px-2.5 py-1 text-xs font-medium rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors">{e.isActive ? 'Deactivate' : 'Activate'}</button>
+                          <button onClick={() => openResetPw(e)} className="px-2.5 py-1 text-xs font-medium rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors">Reset PW</button>
+                          <button onClick={() => { if (confirm(`Archive ${e.firstName} ${e.lastName} as resigned? They will no longer appear in reports or dashboards.`)) archiveMutation.mutate(e.id); }} className="px-2.5 py-1 text-xs font-medium rounded-lg border border-orange-200 text-orange-600 hover:bg-orange-50 transition-colors">Archive</button>
+                          <button onClick={() => confirmDelete(e)} className="px-2.5 py-1 text-xs font-medium rounded-lg border border-red-200 text-red-600 hover:bg-red-50 transition-colors">Delete</button>
                         </div>
                       </td>
                     </tr>

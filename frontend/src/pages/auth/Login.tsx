@@ -117,24 +117,7 @@ export default function LoginPage() {
             </button>
           </form>
 
-          <div className="mt-8 p-4 bg-gray-50 rounded-lg border border-gray-200">
-            <div className="text-xs font-semibold text-gray-600 mb-2">Demo Credentials</div>
-            {[
-              { role: 'Admin', email: 'admin@tams.com', pw: 'Admin@123456' },
-              { role: 'HR', email: 'hr@tams.com', pw: 'Hr@123456' },
-              { role: 'Dept Head', email: 'head.digital@tams.com', pw: 'Head@123456' },
-              { role: 'Employee', email: 'juan@tams.com', pw: 'Employee@123' },
-            ].map((d) => (
-              <button
-                key={d.role}
-                onClick={() => { setEmail(d.email); setPassword(d.pw); }}
-                className="block w-full text-left text-xs py-1.5 px-2 rounded hover:bg-gray-200 transition-colors"
-              >
-                <span className="font-medium">{d.role}</span>
-                <span className="text-gray-400 ml-2">{d.email}</span>
-              </button>
-            ))}
-          </div>
+
         </div>
       </div>
     </div>
