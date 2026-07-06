@@ -22,6 +22,7 @@ const HRAttendancePage = lazy(() => import('./pages/hr/Attendance'));
 const HRReportsPage = lazy(() => import('./pages/hr/Reports'));
 const HREmployeesPage = lazy(() => import('./pages/hr/Employees'));
 const HREmployeeProfile = lazy(() => import('./pages/hr/EmployeeProfile'));
+const HRLeaveManagement = lazy(() => import('./pages/hr/LeaveManagement'));
 const AdminDashboard = lazy(() => import('./pages/admin/Dashboard'));
 const AdminEmployeesPage = lazy(() => import('./pages/admin/Employees'));
 const AdminDepartmentsPage = lazy(() => import('./pages/admin/Departments'));
@@ -86,6 +87,7 @@ export default function App() {
           <Route path="/hr/reports" element={<RequireAuth roles={['HR', 'ADMIN']}><Layout><HRReportsPage /></Layout></RequireAuth>} />
           <Route path="/hr/employees" element={<RequireAuth roles={['HR', 'ADMIN']}><Layout><HREmployeesPage /></Layout></RequireAuth>} />
           <Route path="/hr/employees/:id" element={<RequireAuth roles={['HR']}><Layout><HREmployeeProfile /></Layout></RequireAuth>} />
+          <Route path="/hr/leave-management" element={<RequireAuth roles={['HR', 'ADMIN']}><Layout><HRLeaveManagement /></Layout></RequireAuth>} />
 
           {/* Admin */}
           <Route path="/admin/dashboard" element={<RequireAuth roles={['ADMIN']}><Layout><AdminDashboard /></Layout></RequireAuth>} />

@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../services/api';
-import { Employee, Department, Role } from '../../types';
+import { Employee, Department, Role, EmploymentType } from '../../types';
 import { format, parseISO } from 'date-fns';
 import toast from 'react-hot-toast';
 
@@ -11,6 +11,7 @@ const EMPTY_FORM = {
   dateHired: '', role: 'EMPLOYEE' as Role,
   gender: '', birthday: '', emergencyContact: '', emergencyContactNumber: '',
   sssNumber: '', pagibigNumber: '', philhealthNumber: '', tinNumber: '',
+  employmentType: 'REGULAR' as EmploymentType,
 };
 
 type Modal = 'none' | 'add' | 'edit' | 'resetPw' | 'importResult';
@@ -169,6 +170,7 @@ export default function AdminEmployees() {
       emergencyContact: e.emergencyContact ?? '', emergencyContactNumber: e.emergencyContactNumber ?? '',
       sssNumber: e.sssNumber ?? '', pagibigNumber: e.pagibigNumber ?? '',
       philhealthNumber: e.philhealthNumber ?? '', tinNumber: e.tinNumber ?? '',
+      employmentType: (e.employmentType ?? 'REGULAR') as EmploymentType,
     });
     setModal('edit');
   };
@@ -398,6 +400,15 @@ export default function AdminEmployees() {
               <div>
                 <label className="label">TIN</label>
                 <input className="input" value={form.tinNumber} onChange={(e) => setForm({ ...form, tinNumber: e.target.value })} placeholder="XXX-XXX-XXX" />
+              </div>
+              <div>
+                <label className="label">Employment Type</label>
+                <select className="input" value={form.employmentType} onChange={(e) => setForm({ ...form, employmentType: e.target.value as EmploymentType })}>
+                  <option value="REGULAR">Regular</option>
+                  <option value="PROBATIONARY">Probationary</option>
+                  <option value="CONTRACTUAL">Contractual</option>
+                  <option value="INTERN">Intern</option>
+                </select>
               </div>
             </div>
             {modal === 'add' && <p className="text-xs text-gray-400 mt-3">A temporary password will be generated. Share it securely.</p>}

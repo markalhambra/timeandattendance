@@ -21,6 +21,10 @@
     {
       "path": "/api/cron/daily-maintenance",
       "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/vl-accrual",
+      "schedule": "0 16 1 * *"
     }
   ]
 }

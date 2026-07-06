@@ -84,7 +84,7 @@ export async function getEmployees(req: AuthRequest, res: Response): Promise<voi
 export async function createEmployee(req: AuthRequest, res: Response): Promise<void> {
   const { email, firstName, lastName, middleName, mobile, address, designation, departmentId, dateHired, role,
           nickname, gender, birthday, emergencyContact, emergencyContactNumber,
-          sssNumber, pagibigNumber, philhealthNumber, tinNumber } = req.body;
+          sssNumber, pagibigNumber, philhealthNumber, tinNumber, employmentType } = req.body;
 
   try {
     const exists = await prisma.user.findUnique({ where: { email } });
@@ -126,6 +126,7 @@ export async function createEmployee(req: AuthRequest, res: Response): Promise<v
             pagibigNumber: pagibigNumber || undefined,
             philhealthNumber: philhealthNumber || undefined,
             tinNumber: tinNumber || undefined,
+            employmentType: employmentType || 'REGULAR',
           },
         },
       },
@@ -188,7 +189,7 @@ export async function getEmployee(req: AuthRequest, res: Response): Promise<void
 export async function updateEmployee(req: AuthRequest, res: Response): Promise<void> {
   const { firstName, lastName, middleName, mobile, address, designation, departmentId, dateHired, role,
           sssNumber, pagibigNumber, philhealthNumber, tinNumber,
-          nickname, gender, birthday, emergencyContact, emergencyContactNumber } = req.body;
+          nickname, gender, birthday, emergencyContact, emergencyContactNumber, employmentType } = req.body;
   try {
     const existing = await prisma.employee.findUnique({
       where: { id: req.params.id },
@@ -203,7 +204,8 @@ export async function updateEmployee(req: AuthRequest, res: Response): Promise<v
                sssNumber, pagibigNumber, philhealthNumber, tinNumber,
                nickname, gender,
                birthday: birthday !== undefined ? (birthday ? new Date(birthday) : null) : undefined,
-               emergencyContact, emergencyContactNumber },
+               emergencyContact, emergencyContactNumber,
+               employmentType: employmentType || undefined },
       include: { department: true },
     });
 

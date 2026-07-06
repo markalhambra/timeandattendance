@@ -175,3 +175,61 @@ export async function cronExpirationAlerts(req: Request, res: Response): Promise
     res.status(500).json({ success: false, message: 'Cron job failed.' });
   }
 }
+
+/** POST /api/cron/vl-accrual — monthly VL accrual for Regular employees (Vercel cron) */
+export async function cronVlAccrual(req: Request, res: Response): Promise<void> {
+  if (!verifyCronAuth(req, res)) return;
+  try {
+    const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Manila' }));
+    const year = now.getFullYear();
+    const monthStr = String(now.getMonth() + 1).padStart(2, '0');
+    const accrualReason = `VL Monthly Accrual — ${year}-${monthStr}`;
+    const ACCRUAL_AMOUNT = 1.25;
+
+    const employees = await prisma.employee.findMany({
+      where: { employmentType: 'REGULAR', isActive: true, isArchived: false },
+      select: { id: true },
+    });
+
+    let accrued = 0;
+    for (const emp of employees) {
+      const alreadyRan = await prisma.leaveAdjustment.count({
+        where: { employeeId: emp.id, isSystemGenerated: true, leaveType: 'VACATION', year, reason: accrualReason },
+      });
+      if (alreadyRan > 0) continue;
+
+      const balance = await prisma.leaveBalance.findUnique({
+        where: { employeeId_year_leaveType: { employeeId: emp.id, year, leaveType: 'VACATION' } },
+      });
+      const previousBalance = balance ? balance.totalDays - balance.usedDays - balance.pendingDays : 0;
+
+      await prisma.leaveBalance.upsert({
+        where: { employeeId_year_leaveType: { employeeId: emp.id, year, leaveType: 'VACATION' } },
+        update: { totalDays: { increment: ACCRUAL_AMOUNT } },
+        create: { employeeId: emp.id, year, leaveType: 'VACATION', totalDays: ACCRUAL_AMOUNT },
+      });
+
+      await prisma.leaveAdjustment.create({
+        data: {
+          employeeId: emp.id,
+          leaveType: 'VACATION',
+          year,
+          adjustmentAmount: ACCRUAL_AMOUNT,
+          previousBalance,
+          newBalance: previousBalance + ACCRUAL_AMOUNT,
+          reason: accrualReason,
+          adjustedBy: null,
+          isSystemGenerated: true,
+        },
+      });
+
+      accrued++;
+    }
+
+    logger.info(`Cron VL accrual: ${accrued} of ${employees.length} employees credited.`);
+    res.json({ success: true, accrued, total: employees.length });
+  } catch (err) {
+    logger.error('Cron VL accrual error:', err);
+    res.status(500).json({ success: false, message: 'VL accrual cron job failed.' });
+  }
+}

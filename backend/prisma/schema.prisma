@@ -61,6 +61,13 @@ enum LeaveDuration {
   HALF_DAY_AFTERNOON
 }
 
+enum EmploymentType {
+  REGULAR
+  PROBATIONARY
+  CONTRACTUAL
+  INTERN
+}
+
 enum NotificationType {
   LEAVE_REQUEST
   OVERTIME_REQUEST
@@ -161,6 +168,7 @@ model Employee {
   isActive        Boolean   @default(true)
   isArchived      Boolean   @default(false)
   resignedAt      DateTime?
+  employmentType  EmploymentType @default(REGULAR)
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
@@ -172,6 +180,7 @@ model Employee {
   overtimeRecords OvertimeRecord[]
   overtimeConversions OvertimeConversion[]
   attendanceCorrections AttendanceCorrection[]
+  leaveAdjustments     LeaveAdjustment[]
 
   @@index([departmentId])
   @@index([isActive, isArchived])
@@ -307,6 +316,26 @@ model LeaveRequest {
   @@index([status])
   @@index([employeeId, status])
   @@map("leave_requests")
+}
+
+model LeaveAdjustment {
+  id                String    @id @default(uuid())
+  employeeId        String
+  leaveType         LeaveType
+  year              Int
+  adjustmentAmount  Float
+  previousBalance   Float
+  newBalance        Float
+  reason            String
+  adjustedBy        String?   // userId of HR user; null for system-generated
+  isSystemGenerated Boolean   @default(false)
+  createdAt         DateTime  @default(now())
+
+  employee          Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId])
+  @@index([createdAt])
+  @@map("leave_adjustments")
 }
 
 // ─────────────────────────────────────────────

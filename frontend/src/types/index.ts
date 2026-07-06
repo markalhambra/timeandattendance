@@ -5,6 +5,7 @@ export type AttendanceStatus = 'ON_SITE' | 'WFH' | 'OB' | 'ABSENT';
 export type LeaveType = 'SICK' | 'VACATION' | 'PML' | 'SML' | 'EMERGENCY' | 'SOLO_PARENT' | 'MATERNITY' | 'PATERNITY' | 'BEREAVEMENT' | 'MAGNA_CARTA_WOMEN' | 'LWOP';
 export type ApprovalStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
 export type OvertimeConversionType = 'CTO' | 'CDO';
+export type EmploymentType = 'REGULAR' | 'PROBATIONARY' | 'CONTRACTUAL' | 'INTERN';
 export type NotificationType =
   | 'LEAVE_REQUEST'
   | 'OVERTIME_REQUEST'
@@ -73,6 +74,7 @@ export interface Employee {
   emergencyContact?: string;
   emergencyContactNumber?: string;
   department?: Department;
+  employmentType?: EmploymentType;
   user?: {
     id: string;
     email: string;
@@ -131,6 +133,22 @@ export interface LeaveBalance {
   totalDays: number;
   usedDays: number;
   pendingDays: number;
+}
+
+export interface LeaveAdjustment {
+  id: string;
+  employeeId: string;
+  leaveType: LeaveType;
+  year: number;
+  adjustmentAmount: number;
+  previousBalance: number;
+  newBalance: number;
+  reason: string;
+  adjustedBy: string | null;
+  isSystemGenerated: boolean;
+  createdAt: string;
+  employee?: Pick<Employee, 'firstName' | 'lastName' | 'employeeNumber'>;
+  adjustedByUser?: { id: string; email: string; employee?: Pick<Employee, 'firstName' | 'lastName'> } | null;
 }
 
 export interface LeaveRequest {

@@ -118,41 +118,60 @@ export function scheduleCronJobs(): void {
     }
   }, { timezone: 'Asia/Manila' });
 
-  // Reset all leave balances for all active employees every January 1 at midnight PHT
-  cron.schedule('0 0 1 1 *', async () => {
-    logger.info('Cron: Resetting all leave balances for new year...');
+  // Monthly VL accrual for Regular employees on 1st of every month at midnight PHT
+  cron.schedule('0 0 1 * *', async () => {
+    logger.info('Cron: Running monthly VL accrual...');
     try {
-      const year = phtYear();
+      const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Manila' }));
+      const year = now.getFullYear();
+      const monthStr = String(now.getMonth() + 1).padStart(2, '0');
+      const accrualReason = `VL Monthly Accrual — ${year}-${monthStr}`;
+      const ACCRUAL_AMOUNT = 1.25;
+
       const employees = await prisma.employee.findMany({
-        where: { isActive: true },
+        where: { employmentType: 'REGULAR', isActive: true, isArchived: false },
         select: { id: true },
       });
 
-      const defaults: Record<string, number> = {
-        SICK: 10,
-        VACATION: 15,
-        PML: 7,
-        SML: 3,
-        EMERGENCY: 3,
-        SOLO_PARENT: 7,
-        MATERNITY: 105,
-        PATERNITY: 7,
-        BEREAVEMENT: 5,
-        MAGNA_CARTA_WOMEN: 60,
-      };
-
+      let accrued = 0;
       for (const emp of employees) {
-        for (const leaveType of ['SICK', 'VACATION', 'PML', 'SML', 'EMERGENCY', 'SOLO_PARENT', 'MATERNITY', 'PATERNITY', 'BEREAVEMENT', 'MAGNA_CARTA_WOMEN'] as const) {
-          await prisma.leaveBalance.upsert({
-            where: { employeeId_year_leaveType: { employeeId: emp.id, year, leaveType } },
-            update: { totalDays: defaults[leaveType], usedDays: 0, pendingDays: 0 },
-            create: { employeeId: emp.id, year, leaveType, totalDays: defaults[leaveType], usedDays: 0, pendingDays: 0 },
-          });
-        }
+        // Idempotency: skip if accrual already ran for this employee this month
+        const alreadyRan = await prisma.leaveAdjustment.count({
+          where: { employeeId: emp.id, isSystemGenerated: true, leaveType: 'VACATION', year, reason: accrualReason },
+        });
+        if (alreadyRan > 0) continue;
+
+        const balance = await prisma.leaveBalance.findUnique({
+          where: { employeeId_year_leaveType: { employeeId: emp.id, year, leaveType: 'VACATION' } },
+        });
+
+        const previousBalance = balance ? balance.totalDays - balance.usedDays - balance.pendingDays : 0;
+
+        await prisma.leaveBalance.upsert({
+          where: { employeeId_year_leaveType: { employeeId: emp.id, year, leaveType: 'VACATION' } },
+          update: { totalDays: { increment: ACCRUAL_AMOUNT } },
+          create: { employeeId: emp.id, year, leaveType: 'VACATION', totalDays: ACCRUAL_AMOUNT },
+        });
+
+        await prisma.leaveAdjustment.create({
+          data: {
+            employeeId: emp.id,
+            leaveType: 'VACATION',
+            year,
+            adjustmentAmount: ACCRUAL_AMOUNT,
+            previousBalance,
+            newBalance: previousBalance + ACCRUAL_AMOUNT,
+            reason: accrualReason,
+            adjustedBy: null,
+            isSystemGenerated: true,
+          },
+        });
+
+        accrued++;
       }
-      logger.info(`Reset all leave balances for ${employees.length} employees for year ${year}.`);
+      logger.info(`VL accrual complete: ${accrued} of ${employees.length} employees credited.`);
     } catch (err) {
-      logger.error('Yearly leave reset cron error:', err);
+      logger.error('VL accrual cron error:', err);
     }
   }, { timezone: 'Asia/Manila' });
 }

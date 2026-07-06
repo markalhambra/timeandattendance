@@ -29,13 +29,19 @@ function poolLeaveType(lt: LeaveType): LeaveType {
 async function ensureLeaveBalances(employeeId: string, year: number): Promise<void> {
   const existing = await prisma.leaveBalance.count({ where: { employeeId, year } });
   if (existing >= LEAVE_TYPES.length) return;
+
+  // Carry forward remaining balance from previous year if it exists; otherwise use defaults (new employee)
+  const prevBalances = await prisma.leaveBalance.findMany({ where: { employeeId, year: year - 1 } });
+  const prevMap = new Map(prevBalances.map((b) => [b.leaveType, b]));
+
   await prisma.leaveBalance.createMany({
-    data: LEAVE_TYPES.map((leaveType) => ({
-      employeeId,
-      year,
-      leaveType,
-      totalDays: LEAVE_BALANCE_DEFAULTS[leaveType],
-    })),
+    data: LEAVE_TYPES.map((leaveType) => {
+      const prev = prevMap.get(leaveType);
+      const totalDays = prev
+        ? Math.max(0, prev.totalDays - prev.usedDays - prev.pendingDays)
+        : LEAVE_BALANCE_DEFAULTS[leaveType];
+      return { employeeId, year, leaveType, totalDays };
+    }),
     skipDuplicates: true,
   });
 }
@@ -384,5 +390,130 @@ export async function reviewLeave(req: AuthRequest, res: Response): Promise<void
     res.json({ success: true, data: updated });
   } catch {
     res.status(500).json({ success: false, message: 'Failed to review leave.' });
+  }
+}
+
+// ─── HR Leave Management ───────────────────────────────────────────────────────
+
+/** GET /api/leave/employee/:employeeId/balances — HR views any employee's leave balances */
+export async function getEmployeeLeaveBalances(req: AuthRequest, res: Response): Promise<void> {
+  const { employeeId } = req.params;
+  const year = parseInt((req.query.year as string) || String(phtYear()));
+  try {
+    const employee = await prisma.employee.findUnique({
+      where: { id: employeeId },
+      select: { id: true, firstName: true, lastName: true, employeeNumber: true, department: { select: { name: true } } },
+    });
+    if (!employee) { res.status(404).json({ success: false, message: 'Employee not found.' }); return; }
+
+    await ensureLeaveBalances(employeeId, year);
+    const balances = await prisma.leaveBalance.findMany({ where: { employeeId, year } });
+    res.json({ success: true, data: mirrorEmergencyBalance(balances), employee });
+  } catch {
+    res.status(500).json({ success: false, message: 'Failed to fetch employee leave balances.' });
+  }
+}
+
+/** POST /api/leave/employee/:employeeId/adjust — HR manually adds or deducts leave credits */
+export async function adjustLeaveBalance(req: AuthRequest, res: Response): Promise<void> {
+  const { employeeId } = req.params;
+  const { leaveType, adjustmentAmount, reason } = req.body;
+
+  if (!leaveType || adjustmentAmount === undefined || !reason?.trim()) {
+    res.status(400).json({ success: false, message: 'leaveType, adjustmentAmount, and reason are required.' });
+    return;
+  }
+  if (leaveType === 'LWOP') {
+    res.status(400).json({ success: false, message: 'LWOP has no balance to adjust.' });
+    return;
+  }
+  if (adjustmentAmount === 0) {
+    res.status(400).json({ success: false, message: 'Adjustment amount cannot be zero.' });
+    return;
+  }
+
+  const year = phtYear();
+  try {
+    const employee = await prisma.employee.findUnique({ where: { id: employeeId }, select: { id: true } });
+    if (!employee) { res.status(404).json({ success: false, message: 'Employee not found.' }); return; }
+
+    await ensureLeaveBalances(employeeId, year);
+
+    // SICK and EMERGENCY share a pool — adjust SICK row for both
+    const targetType = poolLeaveType(leaveType as LeaveType);
+
+    const balance = await prisma.leaveBalance.findUnique({
+      where: { employeeId_year_leaveType: { employeeId, year, leaveType: targetType } },
+    });
+    if (!balance) { res.status(404).json({ success: false, message: 'Leave balance not found.' }); return; }
+
+    const previousBalance = balance.totalDays - balance.usedDays - balance.pendingDays;
+    const newTotalDays = Math.max(0, balance.totalDays + adjustmentAmount);
+    const newBalance = newTotalDays - balance.usedDays - balance.pendingDays;
+
+    await prisma.leaveBalance.update({
+      where: { employeeId_year_leaveType: { employeeId, year, leaveType: targetType } },
+      data: { totalDays: newTotalDays },
+    });
+
+    await prisma.leaveAdjustment.create({
+      data: {
+        employeeId,
+        leaveType: leaveType as LeaveType,
+        year,
+        adjustmentAmount,
+        previousBalance,
+        newBalance,
+        reason: reason.trim(),
+        adjustedBy: req.user!.sub,
+        isSystemGenerated: false,
+      },
+    });
+
+    res.json({ success: true, message: 'Leave balance adjusted successfully.', previousBalance, newBalance, adjustmentAmount });
+  } catch {
+    res.status(500).json({ success: false, message: 'Failed to adjust leave balance.' });
+  }
+}
+
+/** GET /api/leave/adjustments — HR views adjustment history */
+export async function getLeaveAdjustments(req: AuthRequest, res: Response): Promise<void> {
+  const { employeeId, page = '1', limit = '50' } = req.query as Record<string, string>;
+  const skip = (parseInt(page) - 1) * parseInt(limit);
+  try {
+    const where: any = {};
+    if (employeeId) where.employeeId = employeeId;
+
+    const [adjustments, total] = await Promise.all([
+      prisma.leaveAdjustment.findMany({
+        where,
+        include: {
+          employee: { select: { firstName: true, lastName: true, employeeNumber: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: parseInt(limit),
+      }),
+      prisma.leaveAdjustment.count({ where }),
+    ]);
+
+    // Enrich with adjustedBy user name
+    const userIds = [...new Set(adjustments.filter((a) => a.adjustedBy).map((a) => a.adjustedBy!))];
+    const users = userIds.length
+      ? await prisma.user.findMany({
+          where: { id: { in: userIds } },
+          include: { employee: { select: { firstName: true, lastName: true } } },
+        })
+      : [];
+    const userMap = new Map(users.map((u) => [u.id, u]));
+
+    const enriched = adjustments.map((a) => ({
+      ...a,
+      adjustedByUser: a.adjustedBy ? userMap.get(a.adjustedBy) ?? null : null,
+    }));
+
+    res.json({ success: true, data: enriched, total, page: parseInt(page), limit: parseInt(limit) });
+  } catch {
+    res.status(500).json({ success: false, message: 'Failed to fetch leave adjustments.' });
   }
 }

@@ -14,3 +14,8 @@ leaveRoutes.delete('/:id', auditLog('DELETE', 'LeaveRequest'), leaveController.c
 
 leaveRoutes.get('/', authorize('DEPARTMENT_HEAD', 'HR', 'ADMIN'), leaveController.getAllLeaves);
 leaveRoutes.patch('/:id/review', authorize('DEPARTMENT_HEAD', 'HR', 'ADMIN'), leaveController.reviewLeave);
+
+// HR Leave Management
+leaveRoutes.get('/adjustments', authorize('HR', 'ADMIN'), leaveController.getLeaveAdjustments);
+leaveRoutes.get('/employee/:employeeId/balances', authorize('HR', 'ADMIN'), leaveController.getEmployeeLeaveBalances);
+leaveRoutes.post('/employee/:employeeId/adjust', authorize('HR', 'ADMIN'), auditLog('UPDATE', 'LeaveBalance'), leaveController.adjustLeaveBalance);
