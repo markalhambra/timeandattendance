@@ -114,7 +114,7 @@ export default function AttendancePage() {
                       {r.overtimeMinutes > 0 ? <span className="font-semibold">{(r.overtimeMinutes / 60).toFixed(1)}h</span> : '—'}
                     </td>
                     <td className="table-cell">
-                      {r.clockIn && (
+                      {r.clockIn && format(parseISO(r.date), 'yyyy-MM-dd') < format(new Date(), 'yyyy-MM-dd') && (
                         <button onClick={() => openCorrection(r)} className="text-xs text-gray-500 hover:text-black underline">
                           Correct
                         </button>

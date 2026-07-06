@@ -212,7 +212,7 @@ export default function ApprovalsPage() {
                     <td className="table-cell">{c.requestedClockIn ? format(parseISO(c.requestedClockIn), 'hh:mm a') : '—'}</td>
                     <td className="table-cell">{c.requestedClockOut ? format(parseISO(c.requestedClockOut), 'hh:mm a') : '—'}</td>
                     <td className="table-cell max-w-xs truncate text-gray-500 text-xs">{(c as any).reason}</td>
-                    <td className="table-cell"><ActionButtons type="corrections" id={c.id} name={`${(c as any).employee?.firstName} ${(c as any).employee?.lastName}`} /></td>
+                    <td className="table-cell"><ActionButtons type="corrections" id={c.id} name={`${(c as any).employee?.firstName} ${(c as any).employee?.lastName}`} ownerId={c.employeeId} /></td>
                   </tr>
                 ))}
               </tbody>
@@ -266,7 +266,7 @@ export default function ApprovalsPage() {
                     <td className="table-cell font-semibold">{c.conversionType}</td>
                     <td className="table-cell">{c.scheduledDate ? format(parseISO(c.scheduledDate), 'MMM d, yyyy') : '—'}</td>
                     <td className="table-cell">{(c.minutesToConvert / 60).toFixed(1)}h</td>
-                    <td className="table-cell"><ActionButtons type="conversions" id={c.id} name={`${(c as any).employee?.firstName} ${(c as any).employee?.lastName}`} /></td>
+                    <td className="table-cell"><ActionButtons type="conversions" id={c.id} name={`${(c as any).employee?.firstName} ${(c as any).employee?.lastName}`} ownerId={(c as any).employeeId} /></td>
                   </tr>
                 ))}
               </tbody>

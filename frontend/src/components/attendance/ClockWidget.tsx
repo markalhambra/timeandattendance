@@ -257,7 +257,7 @@ export default function ClockWidget() {
             <h3 className="font-bold text-base mb-1">Select Attendance Type</h3>
             <p className="text-sm text-gray-500 mb-4">You are outside the office radius ({distance}m). How are you working today?</p>
             <div className="space-y-2 mb-5">
-              {(['WFH', 'OB', 'ON_SITE'] as AttendanceStatus[]).map((s) => (
+              {(['WFH', 'OB'] as AttendanceStatus[]).map((s) => (
                 <button
                   key={s}
                   onClick={() => setSelectedStatus(s)}

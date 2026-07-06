@@ -292,6 +292,13 @@ export async function requestCorrection(req: AuthRequest, res: Response): Promis
     });
     if (!attendance) { res.status(404).json({ success: false, message: 'Attendance record not found.' }); return; }
 
+    // Block corrections for today or future dates — must wait until the next working day
+    const today = phtToday();
+    if (attendance.date >= today) {
+      res.status(400).json({ success: false, message: "You cannot file a correction for today's or a future attendance record. Please wait until the next working day." });
+      return;
+    }
+
     // Validate that requested times are within ±1 day of the attendance date
     // (guards against wrong-date entries that inflate overtime by 24h)
     const parsedClockIn = requestedClockIn ? parsePhilippineDateTime(requestedClockIn) : undefined;
@@ -404,6 +411,12 @@ export async function reviewCorrection(req: AuthRequest, res: Response): Promise
       include: { attendance: true, employee: true },
     });
     if (!correction) { res.status(404).json({ success: false, message: 'Correction not found.' }); return; }
+
+    // HR/Admin cannot approve their own correction request
+    if ((req.user!.role === 'HR' || req.user!.role === 'ADMIN') && correction.employeeId === req.user!.employeeId) {
+      res.status(403).json({ success: false, message: 'You cannot approve your own request.' }); return;
+    }
+
     // Ensure dept head only reviews their own department's corrections
     if (req.user!.role === 'DEPARTMENT_HEAD') {
       const deptId = req.user!.departmentId;

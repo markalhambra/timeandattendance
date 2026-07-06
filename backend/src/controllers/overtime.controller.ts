@@ -381,6 +381,11 @@ export async function reviewConversion(req: AuthRequest, res: Response): Promise
       }
     }
 
+    // HR/Admin cannot approve their own conversion request
+    if ((role === 'HR' || role === 'ADMIN') && existing.employeeId === req.user!.employeeId) {
+      res.status(403).json({ success: false, message: 'You cannot approve your own request.' }); return;
+    }
+
     // Build update data — store reviewer in role-specific field so the log shows who acted
     const updateData: any = {
       status: status as ApprovalStatus,
