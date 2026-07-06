@@ -274,6 +274,14 @@ export async function reviewOvertime(req: AuthRequest, res: Response): Promise<v
       }
     }
 
+    // HR/Admin cannot approve their own overtime
+    if (req.user!.role === 'HR' || req.user!.role === 'ADMIN') {
+      const record = await prisma.overtimeRecord.findUnique({ where: { id }, select: { employeeId: true } });
+      if (record?.employeeId === req.user!.employeeId) {
+        res.status(403).json({ success: false, message: 'You cannot approve your own request.' }); return;
+      }
+    }
+
     const updateData: any = {
       status: status as ApprovalStatus,
       reviewedBy: req.user!.sub,

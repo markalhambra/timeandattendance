@@ -1,7 +1,7 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth.middleware';
 import { prisma } from '../config/database';
-import { ApprovalStatus, LeaveType } from '@prisma/client';
+import { ApprovalStatus, LeaveType, LeaveDuration } from '@prisma/client';
 import { notificationService } from '../services/notification.service';
 import { phtYear, phtMonth } from '../utils/timezone';
 
@@ -40,7 +40,7 @@ async function ensureLeaveBalances(employeeId: string, year: number): Promise<vo
 }
 
 export async function fileLeave(req: AuthRequest, res: Response): Promise<void> {
-  const { leaveType, startDate, endDate, reason } = req.body;
+  const { leaveType, startDate, endDate, reason, leaveDuration = 'FULL_DAY' } = req.body;
   const employeeId = req.user!.employeeId;
   if (!employeeId) { res.status(400).json({ success: false, message: 'Employee not found.' }); return; }
 
@@ -61,7 +61,21 @@ export async function fileLeave(req: AuthRequest, res: Response): Promise<void> 
 
     const start = new Date(startDate);
     const end = new Date(endDate);
-    const totalDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+
+    // Validate half-day: only allowed for VL, SL, EMERGENCY
+    const HALF_DAY_TYPES: LeaveType[] = ['SICK', 'VACATION', 'EMERGENCY'];
+    const isHalfDay = leaveDuration !== 'FULL_DAY';
+    if (isHalfDay && !HALF_DAY_TYPES.includes(leaveType as LeaveType)) {
+      res.status(400).json({ success: false, message: 'Half-day leave is only allowed for Vacation, Sick, and Emergency Leave.' });
+      return;
+    }
+    // Half-day must be a single day (start === end)
+    if (isHalfDay && startDate !== endDate) {
+      res.status(400).json({ success: false, message: 'Half-day leave must be for a single day (start and end date must be the same).' });
+      return;
+    }
+
+    const totalDays = isHalfDay ? 0.5 : Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
 
     const year = start.getFullYear();
     await ensureLeaveBalances(employeeId, year);
@@ -76,7 +90,7 @@ export async function fileLeave(req: AuthRequest, res: Response): Promise<void> 
     }
 
     const leave = await prisma.leaveRequest.create({
-      data: { employeeId, leaveType, startDate: start, endDate: end, totalDays, reason },
+      data: { employeeId, leaveType, leaveDuration: leaveDuration as LeaveDuration, startDate: start, endDate: end, totalDays, reason },
     });
 
     await prisma.leaveBalance.update({
@@ -247,6 +261,12 @@ export async function reviewLeave(req: AuthRequest, res: Response): Promise<void
 
     const role = req.user!.role;
     const isHrOrAdmin = role === 'HR' || role === 'ADMIN';
+
+    // HR/Admin cannot approve their own leave
+    if (isHrOrAdmin && leave.employeeId === req.user!.employeeId) {
+      res.status(403).json({ success: false, message: 'You cannot approve your own request.' });
+      return;
+    }
 
     // Dept head: only own department, and only if not yet finalized
     if (role === 'DEPARTMENT_HEAD') {

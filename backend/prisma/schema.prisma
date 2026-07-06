@@ -54,6 +54,12 @@ enum OvertimeConversionType {
   CDO
 }
 
+enum LeaveDuration {
+  FULL_DAY
+  HALF_DAY_MORNING
+  HALF_DAY_AFTERNOON
+}
+
 enum NotificationType {
   LEAVE_REQUEST
   OVERTIME_REQUEST
@@ -273,6 +279,7 @@ model LeaveRequest {
   id              String         @id @default(uuid())
   employeeId      String
   leaveType       LeaveType
+  leaveDuration   LeaveDuration  @default(FULL_DAY)
   startDate       DateTime       @db.Date
   endDate         DateTime       @db.Date
   totalDays       Float

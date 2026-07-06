@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../services/api';
+import { useAuth } from '../../contexts/AuthContext';
 import { LeaveRequest, OvertimeRecord, AttendanceCorrection, OvertimeConversion } from '../../types';
 import { format, parseISO } from 'date-fns';
 import toast from 'react-hot-toast';
@@ -10,6 +11,7 @@ type Tab = 'leaves' | 'overtime' | 'corrections' | 'conversions';
 interface ReviewModalState { type: Tab; id: string; action: 'APPROVED' | 'REJECTED'; name: string; }
 
 export default function ApprovalsPage() {
+  const { user } = useAuth();
   const qc = useQueryClient();
   const [tab, setTab] = useState<Tab>('leaves');
   const [modal, setModal] = useState<ReviewModalState | null>(null);
@@ -87,12 +89,18 @@ export default function ApprovalsPage() {
     MAGNA_CARTA_WOMEN: 'Magna Carta for Women Leave',
   };
 
-  const ActionButtons = ({ type, id, name }: { type: Tab; id: string; name: string }) => (
-    <div className="flex gap-1.5">
-      <button onClick={() => openModal(type, id, name, 'APPROVED')} className="btn bg-black text-white text-xs px-3 py-1.5">Approve</button>
-      <button onClick={() => openModal(type, id, name, 'REJECTED')} className="btn bg-red-50 text-red-600 text-xs px-3 py-1.5">Reject</button>
-    </div>
-  );
+  const ActionButtons = ({ type, id, name, ownerId }: { type: Tab; id: string; name: string; ownerId?: string }) => {
+    // HR/Admin cannot approve their own requests
+    if (ownerId && user?.employee?.id && ownerId === user.employee.id) {
+      return <span className="text-xs text-gray-400 italic">Cannot approve own request</span>;
+    }
+    return (
+      <div className="flex gap-1.5">
+        <button onClick={() => openModal(type, id, name, 'APPROVED')} className="btn bg-black text-white text-xs px-3 py-1.5">Approve</button>
+        <button onClick={() => openModal(type, id, name, 'REJECTED')} className="btn bg-red-50 text-red-600 text-xs px-3 py-1.5">Reject</button>
+      </div>
+    );
+  };
 
   return (
     <div className="space-y-6">
@@ -143,7 +151,7 @@ export default function ApprovalsPage() {
                     <td className="table-cell max-w-xs truncate text-gray-500 text-xs">{l.deptHeadNotes || '—'}</td>
                     <td className="table-cell text-gray-400 text-xs">{l.deptHeadAt ? format(parseISO(l.deptHeadAt), 'MMM d, yyyy') : '—'}</td>
                     <td className="table-cell">
-                      {l.status === 'PENDING' && <ActionButtons type="leaves" id={l.id} name={`${l.employee?.firstName} ${l.employee?.lastName}`} />}
+                      {l.status === 'PENDING' && <ActionButtons type="leaves" id={l.id} name={`${l.employee?.firstName} ${l.employee?.lastName}`} ownerId={l.employeeId} />}
                     </td>
                   </tr>
                 ))}
@@ -181,7 +189,7 @@ export default function ApprovalsPage() {
                     <td className="table-cell max-w-xs truncate text-gray-500 text-xs">{o.reviewerNotes || '—'}</td>
                     <td className="table-cell text-gray-400 text-xs">{o.reviewedAt ? format(parseISO(o.reviewedAt), 'MMM d, yyyy') : '—'}</td>
                     <td className="table-cell">
-                      {o.status === 'PENDING' && <ActionButtons type="overtime" id={o.id} name={`${(o as any).employee?.firstName} ${(o as any).employee?.lastName}`} />}
+                      {o.status === 'PENDING' && <ActionButtons type="overtime" id={o.id} name={`${(o as any).employee?.firstName} ${(o as any).employee?.lastName}`} ownerId={o.employeeId} />}
                     </td>
                   </tr>
                 ))}

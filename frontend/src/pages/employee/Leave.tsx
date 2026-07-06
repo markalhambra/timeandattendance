@@ -31,7 +31,11 @@ export default function LeavePage() {
   const qc = useQueryClient();
   const [showModal, setShowModal] = useState(false);
   const [viewLeave, setViewLeave] = useState<LeaveRequest | null>(null);
-  const [form, setForm] = useState({ leaveType: 'SICK' as LeaveType, startDate: '', endDate: '', reason: '' });
+  type LeaveDuration = 'FULL_DAY' | 'HALF_DAY_MORNING' | 'HALF_DAY_AFTERNOON';
+  const HALF_DAY_TYPES: LeaveType[] = ['SICK', 'VACATION', 'EMERGENCY'];
+  const [form, setForm] = useState({ leaveType: 'SICK' as LeaveType, leaveDuration: 'FULL_DAY' as LeaveDuration, startDate: '', endDate: '', reason: '' });
+  const isHalfDay = form.leaveDuration !== 'FULL_DAY';
+  const supportsHalfDay = HALF_DAY_TYPES.includes(form.leaveType);
 
   const { data: myProfile } = useQuery<Employee>({
     queryKey: ['my-profile'],
@@ -62,7 +66,7 @@ export default function LeavePage() {
     onSuccess: () => {
       toast.success('Leave filed successfully.');
       setShowModal(false);
-      setForm({ leaveType: 'SICK', startDate: '', endDate: '', reason: '' });
+      setForm({ leaveType: 'SICK', leaveDuration: 'FULL_DAY', startDate: '', endDate: '', reason: '' });
       qc.invalidateQueries({ queryKey: ['my-leaves'] });
       qc.invalidateQueries({ queryKey: ['leave-balances'] });
     },
@@ -240,18 +244,52 @@ export default function LeavePage() {
             <div className="space-y-3">
               <div>
                 <label className="label">Leave Type</label>
-                <select value={form.leaveType} onChange={(e) => setForm((f) => ({ ...f, leaveType: e.target.value as LeaveType }))} className="input">
+                <select
+                  value={form.leaveType}
+                  onChange={(e) => setForm((f) => ({ ...f, leaveType: e.target.value as LeaveType, leaveDuration: 'FULL_DAY' }))}
+                  className="input"
+                >
                   {LEAVE_TYPES.map((lt) => <option key={lt.value} value={lt.value}>{lt.label}</option>)}
                 </select>
               </div>
+              {supportsHalfDay && (
+                <div>
+                  <label className="label">Leave Duration</label>
+                  <select
+                    value={form.leaveDuration}
+                    onChange={(e) => setForm((f) => ({ ...f, leaveDuration: e.target.value as LeaveDuration, endDate: e.target.value !== 'FULL_DAY' ? f.startDate : f.endDate }))}
+                    className="input"
+                  >
+                    <option value="FULL_DAY">Full Day</option>
+                    <option value="HALF_DAY_MORNING">Half Day - Morning</option>
+                    <option value="HALF_DAY_AFTERNOON">Half Day - Afternoon</option>
+                  </select>
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="label">Start Date</label>
-                  <input type="date" value={form.startDate} onChange={(e) => setForm((f) => ({ ...f, startDate: e.target.value }))} className="input" min={format(new Date(), 'yyyy-MM-dd')} required />
+                  <input
+                    type="date"
+                    value={form.startDate}
+                    onChange={(e) => setForm((f) => ({ ...f, startDate: e.target.value, endDate: isHalfDay ? e.target.value : f.endDate }))}
+                    className="input"
+                    min={format(new Date(), 'yyyy-MM-dd')}
+                    required
+                  />
                 </div>
                 <div>
                   <label className="label">End Date</label>
-                  <input type="date" value={form.endDate} onChange={(e) => setForm((f) => ({ ...f, endDate: e.target.value }))} className="input" min={form.startDate} required />
+                  <input
+                    type="date"
+                    value={isHalfDay ? form.startDate : form.endDate}
+                    onChange={(e) => setForm((f) => ({ ...f, endDate: e.target.value }))}
+                    className="input"
+                    min={form.startDate}
+                    disabled={isHalfDay}
+                    required
+                  />
+                  {isHalfDay && <p className="text-xs text-gray-400 mt-1">Half-day is a single day (0.5 credit)</p>}
                 </div>
               </div>
               <div>

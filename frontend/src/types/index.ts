@@ -137,6 +137,7 @@ export interface LeaveRequest {
   id: string;
   employeeId: string;
   leaveType: LeaveType;
+  leaveDuration: 'FULL_DAY' | 'HALF_DAY_MORNING' | 'HALF_DAY_AFTERNOON';
   startDate: string;
   endDate: string;
   totalDays: number;
