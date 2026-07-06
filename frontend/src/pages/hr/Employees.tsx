@@ -273,12 +273,22 @@ export default function HREmployees() {
                         </span>
                       </td>
                       <td className="table-cell">
-                        <div className="flex gap-1.5 flex-wrap">
-                          <button onClick={() => openEdit(e)} className="px-2.5 py-1 text-xs font-medium rounded-lg border border-blue-200 text-blue-700 hover:bg-blue-50 transition-colors">Edit</button>
-                          <button onClick={() => { if (confirm(`${e.isActive ? 'Deactivate' : 'Activate'} ${e.firstName}?`)) toggleMutation.mutate(e.id); }} className="px-2.5 py-1 text-xs font-medium rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors">{e.isActive ? 'Deactivate' : 'Activate'}</button>
-                          <button onClick={() => openResetPw(e)} className="px-2.5 py-1 text-xs font-medium rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors">Reset PW</button>
-                          <button onClick={() => { if (confirm(`Archive ${e.firstName} ${e.lastName} as resigned? They will no longer appear in reports or dashboards.`)) archiveMutation.mutate(e.id); }} className="px-2.5 py-1 text-xs font-medium rounded-lg border border-orange-200 text-orange-600 hover:bg-orange-50 transition-colors">Archive</button>
-                          <button onClick={() => confirmDelete(e)} className="px-2.5 py-1 text-xs font-medium rounded-lg border border-red-200 text-red-600 hover:bg-red-50 transition-colors">Delete</button>
+                        <div className="flex gap-1 items-center">
+                          <button onClick={() => openEdit(e)} title="Edit" className="p-1.5 rounded-lg border border-blue-200 text-blue-700 hover:bg-blue-50 transition-colors">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 112.828 2.828L11.828 15.828a2 2 0 01-1.414.586H9v-2.414a2 2 0 01.586-1.414z" /></svg>
+                          </button>
+                          <button onClick={() => { if (confirm(`${e.isActive ? 'Deactivate' : 'Activate'} ${e.firstName}?`)) toggleMutation.mutate(e.id); }} title={e.isActive ? 'Deactivate' : 'Activate'} className="p-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5.636 5.636a9 9 0 1012.728 0M12 3v9" /></svg>
+                          </button>
+                          <button onClick={() => openResetPw(e)} title="Reset Password" className="p-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" /></svg>
+                          </button>
+                          <button onClick={() => { if (confirm(`Archive ${e.firstName} ${e.lastName} as resigned? They will no longer appear in reports or dashboards.`)) archiveMutation.mutate(e.id); }} title="Archive" className="p-1.5 rounded-lg border border-orange-200 text-orange-600 hover:bg-orange-50 transition-colors">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" /></svg>
+                          </button>
+                          <button onClick={() => confirmDelete(e)} title="Delete" className="p-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 transition-colors">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                          </button>
                         </div>
                       </td>
                     </tr>
