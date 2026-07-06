@@ -1,4 +1,7 @@
 {
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "framework": "vite",
   "rewrites": [
     { "source": "/api/:path*", "destination": "https://backend-kappa-five-44.vercel.app/api/:path*" },
     { "source": "/(.*)", "destination": "/index.html" }
