@@ -1,0 +1,2 @@
+-- AddEnumValue
+ALTER TYPE "LeaveType" ADD VALUE IF NOT EXISTS 'LWOP';

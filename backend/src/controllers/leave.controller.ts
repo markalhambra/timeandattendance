@@ -16,6 +16,7 @@ const LEAVE_BALANCE_DEFAULTS: Record<LeaveType, number> = {
   PATERNITY: 7,
   BEREAVEMENT: 5,
   MAGNA_CARTA_WOMEN: 60,
+  LWOP: 0, // no balance tracking — unpaid leave
 };
 
 const LEAVE_TYPES = Object.keys(LEAVE_BALANCE_DEFAULTS) as LeaveType[];
@@ -45,15 +46,15 @@ export async function fileLeave(req: AuthRequest, res: Response): Promise<void> 
   if (!employeeId) { res.status(400).json({ success: false, message: 'Employee not found.' }); return; }
 
   try {
-    // Enforce 6-month minimum tenure for EMPLOYEE role
-    if (req.user!.role === 'EMPLOYEE') {
+    // Enforce 6-month minimum tenure for EMPLOYEE role — LWOP is always allowed
+    if (req.user!.role === 'EMPLOYEE' && leaveType !== 'LWOP') {
       const emp = await prisma.employee.findUnique({ where: { id: employeeId }, select: { dateHired: true } });
       if (emp?.dateHired) {
         const eligibleAt = new Date(emp.dateHired);
         eligibleAt.setMonth(eligibleAt.getMonth() + 6);
         if (new Date() < eligibleAt) {
           const eligibleOn = eligibleAt.toISOString().split('T')[0];
-          res.status(403).json({ success: false, message: `Leave filing is available after 6 months of service. You will be eligible on ${eligibleOn}.` });
+          res.status(403).json({ success: false, message: `Leave filing is available after 6 months of service. You will be eligible on ${eligibleOn}. You may file Leave Without Pay (LWOP) in the meantime.` });
           return;
         }
       }
@@ -78,25 +79,32 @@ export async function fileLeave(req: AuthRequest, res: Response): Promise<void> 
     const totalDays = isHalfDay ? 0.5 : Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
 
     const year = start.getFullYear();
-    await ensureLeaveBalances(employeeId, year);
-    const poolType = poolLeaveType(leaveType as LeaveType);
-    const balance = await prisma.leaveBalance.findUnique({
-      where: { employeeId_year_leaveType: { employeeId, year, leaveType: poolType } },
-    });
 
-    if (!balance || (balance.totalDays - balance.usedDays - balance.pendingDays) < totalDays) {
-      res.status(400).json({ success: false, message: 'Insufficient leave balance.' });
-      return;
+    // LWOP has no balance to check or deduct — skip balance logic entirely
+    if (leaveType !== 'LWOP') {
+      await ensureLeaveBalances(employeeId, year);
+      const poolType = poolLeaveType(leaveType as LeaveType);
+      const balance = await prisma.leaveBalance.findUnique({
+        where: { employeeId_year_leaveType: { employeeId, year, leaveType: poolType } },
+      });
+
+      if (!balance || (balance.totalDays - balance.usedDays - balance.pendingDays) < totalDays) {
+        res.status(400).json({ success: false, message: 'Insufficient leave balance.' });
+        return;
+      }
     }
 
     const leave = await prisma.leaveRequest.create({
       data: { employeeId, leaveType, leaveDuration: leaveDuration as LeaveDuration, startDate: start, endDate: end, totalDays, reason },
     });
 
-    await prisma.leaveBalance.update({
-      where: { employeeId_year_leaveType: { employeeId, year, leaveType: poolType } },
-      data: { pendingDays: { increment: totalDays } },
-    });
+    if (leaveType !== 'LWOP') {
+      const poolType = poolLeaveType(leaveType as LeaveType);
+      await prisma.leaveBalance.update({
+        where: { employeeId_year_leaveType: { employeeId, year, leaveType: poolType } },
+        data: { pendingDays: { increment: totalDays } },
+      });
+    }
 
     await notificationService.notifyDeptHead(employeeId, 'LEAVE_REQUEST', { leaveId: leave.id });
 
@@ -186,11 +194,13 @@ export async function cancelLeave(req: AuthRequest, res: Response): Promise<void
 
     await prisma.leaveRequest.update({ where: { id }, data: { status: ApprovalStatus.CANCELLED } });
 
-    const year = leave.startDate.getFullYear();
-    await prisma.leaveBalance.update({
-      where: { employeeId_year_leaveType: { employeeId: employeeId!, year, leaveType: poolLeaveType(leave.leaveType) } },
-      data: { pendingDays: { decrement: leave.totalDays } },
-    });
+    if (leave.leaveType !== 'LWOP') {
+      const year = leave.startDate.getFullYear();
+      await prisma.leaveBalance.update({
+        where: { employeeId_year_leaveType: { employeeId: employeeId!, year, leaveType: poolLeaveType(leave.leaveType) } },
+        data: { pendingDays: { decrement: leave.totalDays } },
+      });
+    }
 
     res.json({ success: true, message: 'Leave cancelled.' });
   } catch {
@@ -298,10 +308,12 @@ export async function reviewLeave(req: AuthRequest, res: Response): Promise<void
           status: ApprovalStatus.APPROVED,
         },
       });
-      await prisma.leaveBalance.update({
-        where: { employeeId_year_leaveType: { employeeId: leave.employeeId, year, leaveType: poolLeaveType(leave.leaveType) } },
-        data: { pendingDays: { decrement: leave.totalDays }, usedDays: { increment: leave.totalDays } },
-      });
+      if (leave.leaveType !== 'LWOP') {
+        await prisma.leaveBalance.update({
+          where: { employeeId_year_leaveType: { employeeId: leave.employeeId, year, leaveType: poolLeaveType(leave.leaveType) } },
+          data: { pendingDays: { decrement: leave.totalDays }, usedDays: { increment: leave.totalDays } },
+        });
+      }
       await notificationService.notifyEmployee(leave.employeeId, 'APPROVAL_RESULT', { type: 'Leave Request', status, reviewer: role });
       prisma.auditLog.create({ data: { userId: req.user!.sub, action: 'APPROVE', entity: 'LeaveRequest', entityId: id, ipAddress: req.ip, userAgent: req.headers['user-agent'] } }).catch(() => {});
       res.json({ success: true, data: updated }); return;
@@ -320,10 +332,12 @@ export async function reviewLeave(req: AuthRequest, res: Response): Promise<void
           status: ApprovalStatus.REJECTED,
         },
       });
-      await prisma.leaveBalance.update({
-        where: { employeeId_year_leaveType: { employeeId: leave.employeeId, year, leaveType: poolLeaveType(leave.leaveType) } },
-        data: { pendingDays: { decrement: leave.totalDays } },
-      });
+      if (leave.leaveType !== 'LWOP') {
+        await prisma.leaveBalance.update({
+          where: { employeeId_year_leaveType: { employeeId: leave.employeeId, year, leaveType: poolLeaveType(leave.leaveType) } },
+          data: { pendingDays: { decrement: leave.totalDays } },
+        });
+      }
       await notificationService.notifyEmployee(leave.employeeId, 'APPROVAL_RESULT', { type: 'Leave Request', status, reviewer: role });
       prisma.auditLog.create({ data: { userId: req.user!.sub, action: 'REJECT', entity: 'LeaveRequest', entityId: id, ipAddress: req.ip, userAgent: req.headers['user-agent'] } }).catch(() => {});
       res.json({ success: true, data: updated }); return;
@@ -344,15 +358,19 @@ export async function reviewLeave(req: AuthRequest, res: Response): Promise<void
     });
 
     if (finalStatus === 'APPROVED') {
-      await prisma.leaveBalance.update({
-        where: { employeeId_year_leaveType: { employeeId: leave.employeeId, year, leaveType: poolLeaveType(leave.leaveType) } },
-        data: { pendingDays: { decrement: leave.totalDays }, usedDays: { increment: leave.totalDays } },
-      });
+      if (leave.leaveType !== 'LWOP') {
+        await prisma.leaveBalance.update({
+          where: { employeeId_year_leaveType: { employeeId: leave.employeeId, year, leaveType: poolLeaveType(leave.leaveType) } },
+          data: { pendingDays: { decrement: leave.totalDays }, usedDays: { increment: leave.totalDays } },
+        });
+      }
     } else {
-      await prisma.leaveBalance.update({
-        where: { employeeId_year_leaveType: { employeeId: leave.employeeId, year, leaveType: poolLeaveType(leave.leaveType) } },
-        data: { pendingDays: { decrement: leave.totalDays } },
-      });
+      if (leave.leaveType !== 'LWOP') {
+        await prisma.leaveBalance.update({
+          where: { employeeId_year_leaveType: { employeeId: leave.employeeId, year, leaveType: poolLeaveType(leave.leaveType) } },
+          data: { pendingDays: { decrement: leave.totalDays } },
+        });
+      }
     }
 
     await notificationService.notifyEmployee(leave.employeeId, 'APPROVAL_RESULT', {

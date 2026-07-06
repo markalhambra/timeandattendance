@@ -17,6 +17,7 @@ const LEAVE_TYPES: { value: LeaveType; label: string; desc: string }[] = [
   { value: 'PATERNITY', label: 'Paternity Leave', desc: 'For fathers after childbirth' },
   { value: 'BEREAVEMENT', label: 'Bereavement Leave', desc: 'For the loss of a family member' },
   { value: 'MAGNA_CARTA_WOMEN', label: 'Magna Carta for Women Leave', desc: 'For qualified benefits under the Magna Carta of Women' },
+  { value: 'LWOP', label: 'Leave Without Pay', desc: 'Unpaid leave — no balance required' },
 ];
 
 const STATUS_COLORS: Record<string, string> = {
@@ -30,6 +31,7 @@ export default function LeavePage() {
   const { user } = useAuth();
   const qc = useQueryClient();
   const [showModal, setShowModal] = useState(false);
+  const [lwopOnly, setLwopOnly] = useState(false);
   const [viewLeave, setViewLeave] = useState<LeaveRequest | null>(null);
   type LeaveDuration = 'FULL_DAY' | 'HALF_DAY_MORNING' | 'HALF_DAY_AFTERNOON';
   const HALF_DAY_TYPES: LeaveType[] = ['SICK', 'VACATION', 'EMERGENCY'];
@@ -65,8 +67,7 @@ export default function LeavePage() {
     mutationFn: (body: any) => api.post('/leave', body),
     onSuccess: () => {
       toast.success('Leave filed successfully.');
-      setShowModal(false);
-      setForm({ leaveType: 'SICK', leaveDuration: 'FULL_DAY', startDate: '', endDate: '', reason: '' });
+      closeModal();
       qc.invalidateQueries({ queryKey: ['my-leaves'] });
       qc.invalidateQueries({ queryKey: ['leave-balances'] });
     },
@@ -80,6 +81,18 @@ export default function LeavePage() {
   });
 
   const leaveTypeLabel = (t: string) => LEAVE_TYPES.find((l) => l.value === t)?.label || t;
+
+  const openLwopModal = () => {
+    setForm((f) => ({ ...f, leaveType: 'LWOP', leaveDuration: 'FULL_DAY' }));
+    setLwopOnly(true);
+    setShowModal(true);
+  };
+
+  const closeModal = () => {
+    setShowModal(false);
+    setLwopOnly(false);
+    setForm({ leaveType: 'SICK', leaveDuration: 'FULL_DAY', startDate: '', endDate: '', reason: '' });
+  };
 
   const getLeaveStage = (l: LeaveRequest): { label: string; color: string } => {
     if (l.status === 'CANCELLED') return { label: 'Cancelled', color: 'bg-gray-100 text-gray-500' };
@@ -97,14 +110,21 @@ export default function LeavePage() {
           <h1 className="text-2xl font-black">Leave Management</h1>
           <p className="text-sm text-gray-500 mt-0.5">File and track your leave requests</p>
         </div>
-        <button
-          onClick={() => setShowModal(true)}
-          disabled={isBelowSixMonths}
-          title={isBelowSixMonths && eligibleOn ? `Leave filing is available after 6 months of service. Eligible on ${eligibleOn}.` : undefined}
-          className={`btn-primary ${isBelowSixMonths ? 'opacity-50 cursor-not-allowed' : ''}`}
-        >
-          + File Leave
-        </button>
+        <div className="flex items-center gap-2">
+          {isBelowSixMonths && (
+            <button onClick={openLwopModal} className="btn-primary">
+              + File LWOP
+            </button>
+          )}
+          <button
+            onClick={() => setShowModal(true)}
+            disabled={isBelowSixMonths}
+            title={isBelowSixMonths && eligibleOn ? `Leave filing is available after 6 months of service. Eligible on ${eligibleOn}.` : undefined}
+            className={`btn-primary ${isBelowSixMonths ? 'opacity-50 cursor-not-allowed' : ''}`}
+          >
+            + File Leave
+          </button>
+        </div>
       </div>
 
       {isBelowSixMonths && (
@@ -120,9 +140,9 @@ export default function LeavePage() {
         </div>
       )}
 
-      {/* Leave balances */}
+      {/* Leave balances — LWOP has no balance to track */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {LEAVE_TYPES.map((lt) => {
+        {LEAVE_TYPES.filter((lt) => lt.value !== 'LWOP').map((lt) => {
           const bal = balanceMap.get(lt.value);
           const avail = bal ? bal.totalDays - bal.usedDays - bal.pendingDays : 0;
           return (
@@ -240,17 +260,26 @@ export default function LeavePage() {
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
           <div className="bg-white rounded-2xl shadow-modal w-full max-w-md p-6 animate-slide-in">
-            <h3 className="font-bold text-base mb-4">File Leave Request</h3>
+            <h3 className="font-bold text-base mb-4">{lwopOnly ? 'File Leave Without Pay (LWOP)' : 'File Leave Request'}</h3>
+            {lwopOnly && (
+              <div className="mb-3 px-3 py-2 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800">
+                LWOP is unpaid leave. No leave balance will be deducted. Subject to approval.
+              </div>
+            )}
             <div className="space-y-3">
               <div>
                 <label className="label">Leave Type</label>
-                <select
-                  value={form.leaveType}
-                  onChange={(e) => setForm((f) => ({ ...f, leaveType: e.target.value as LeaveType, leaveDuration: 'FULL_DAY' }))}
-                  className="input"
-                >
-                  {LEAVE_TYPES.map((lt) => <option key={lt.value} value={lt.value}>{lt.label}</option>)}
-                </select>
+                {lwopOnly ? (
+                  <div className="input bg-gray-50 text-gray-700">Leave Without Pay (LWOP)</div>
+                ) : (
+                  <select
+                    value={form.leaveType}
+                    onChange={(e) => setForm((f) => ({ ...f, leaveType: e.target.value as LeaveType, leaveDuration: 'FULL_DAY' }))}
+                    className="input"
+                  >
+                    {LEAVE_TYPES.map((lt) => <option key={lt.value} value={lt.value}>{lt.label}</option>)}
+                  </select>
+                )}
               </div>
               {supportsHalfDay && (
                 <div>
@@ -298,10 +327,10 @@ export default function LeavePage() {
               </div>
             </div>
             <div className="flex gap-2 mt-5">
-              <button onClick={() => setShowModal(false)} className="btn-secondary flex-1">Cancel</button>
+              <button onClick={closeModal} className="btn-secondary flex-1">Cancel</button>
               <button
                 onClick={() => fileMutation.mutate(form)}
-                disabled={isBelowSixMonths || !form.startDate || !form.endDate || !form.reason || fileMutation.isPending}
+                disabled={isBelowSixMonths && !lwopOnly || !form.startDate || !form.endDate || !form.reason || fileMutation.isPending}
                 className="btn-primary flex-1"
               >
                 {fileMutation.isPending ? 'Filing...' : 'File Leave'}
