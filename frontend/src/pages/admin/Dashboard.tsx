@@ -16,6 +16,7 @@ export default function AdminDashboard() {
     queryKey: ['admin-dashboard'],
     queryFn: () => api.get('/dashboard/admin').then((r) => r.data.data),
     refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
   });
 
   if (isLoading) return <div className="space-y-4">{[...Array(4)].map((_, i) => <div key={i} className="h-32 bg-gray-100 rounded-xl animate-pulse" />)}</div>;

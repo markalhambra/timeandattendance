@@ -226,10 +226,10 @@ export async function getAllOvertime(req: AuthRequest, res: Response): Promise<v
     const where: any = {};
     if (status) where.status = status;
     if (req.user!.role === 'DEPARTMENT_HEAD') {
-      const dept = await prisma.department.findFirst({ where: { headId: req.user!.sub } });
-      if (!dept) { res.json({ success: true, data: [], meta: { total: 0 } }); return; }
+      const deptId = req.user!.departmentId;
+      if (!deptId) { res.json({ success: true, data: [], meta: { total: 0 } }); return; }
       // Exclude the dept head's own overtime — those go to HR
-      where.employee = { departmentId: dept.id, userId: { not: req.user!.sub } };
+      where.employee = { departmentId: deptId, userId: { not: req.user!.sub } };
       // Only show formally filed requests (not auto-created drafts)
       where.isFiled = true;
     } else if (departmentId) {
@@ -264,9 +264,9 @@ export async function reviewOvertime(req: AuthRequest, res: Response): Promise<v
   try {
     // Ensure dept head only reviews their own department's overtime, and not their own
     if (req.user!.role === 'DEPARTMENT_HEAD') {
-      const dept = await prisma.department.findFirst({ where: { headId: req.user!.sub } });
+      const deptId = req.user!.departmentId;
       const record = await prisma.overtimeRecord.findUnique({ where: { id }, include: { employee: true } });
-      if (!dept || !record || record.employee.departmentId !== dept.id) {
+      if (!deptId || !record || record.employee.departmentId !== deptId) {
         res.status(403).json({ success: false, message: 'You can only review overtime from your department.' }); return;
       }
       if (record.employee.userId === req.user!.sub) {
@@ -325,9 +325,9 @@ export async function getConversions(req: AuthRequest, res: Response): Promise<v
     if (conversionType) where.conversionType = conversionType;
     // Dept head: scoped to own department; HR/Admin: all employees
     if (role === 'DEPARTMENT_HEAD') {
-      const dept = await prisma.department.findFirst({ where: { headId: req.user!.sub } });
+      const deptId = req.user!.departmentId;
       // Exclude the dept head's own conversions — those go to HR
-      if (dept) where.employee = { departmentId: dept.id, userId: { not: req.user!.sub } };
+      if (deptId) where.employee = { departmentId: deptId, userId: { not: req.user!.sub } };
     } else if (departmentId) {
       where.employee = { departmentId };
     }
@@ -364,8 +364,8 @@ export async function reviewConversion(req: AuthRequest, res: Response): Promise
 
     // Dept head: scoped to own department only, and cannot approve their own
     if (role === 'DEPARTMENT_HEAD') {
-      const dept = await prisma.department.findFirst({ where: { headId: req.user!.sub } });
-      if (!dept || existing.employee.departmentId !== dept.id) {
+      const deptId = req.user!.departmentId;
+      if (!deptId || existing.employee.departmentId !== deptId) {
         res.status(403).json({ success: false, message: 'You can only review conversions from your department.' }); return;
       }
       if (existing.employee.userId === req.user!.sub) {

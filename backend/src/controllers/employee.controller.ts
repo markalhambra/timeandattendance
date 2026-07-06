@@ -50,8 +50,8 @@ export async function getEmployees(req: AuthRequest, res: Response): Promise<voi
       if (isActive !== undefined) where.isActive = isActive === 'true';
     }
     if (req.user!.role === 'DEPARTMENT_HEAD') {
-      const dept = await prisma.department.findFirst({ where: { headId: req.user!.sub } });
-      if (dept) where.departmentId = dept.id;
+      const deptId = req.user!.departmentId;
+      if (deptId) where.departmentId = deptId;
     } else if (departmentId) {
       where.departmentId = departmentId;
     }
@@ -90,8 +90,13 @@ export async function createEmployee(req: AuthRequest, res: Response): Promise<v
     const exists = await prisma.user.findUnique({ where: { email } });
     if (exists) { res.status(400).json({ success: false, message: 'Email already exists.' }); return; }
 
-    const count = await prisma.employee.count();
-    const employeeNumber = `EMP-${String(count + 1).padStart(4, '0')}`;
+    // Use MAX(employeeNumber) to correctly handle deletions and avoid race conditions
+    const lastEmployee = await prisma.employee.findFirst({
+      orderBy: { employeeNumber: 'desc' },
+      select: { employeeNumber: true },
+    });
+    const lastNum = lastEmployee ? parseInt(lastEmployee.employeeNumber.replace('EMP-', ''), 10) || 0 : 0;
+    const employeeNumber = `EMP-${String(lastNum + 1).padStart(4, '0')}`;
     const tempPassword = crypto.randomBytes(8).toString('hex');
     const hashed = await bcrypt.hash(tempPassword, 12);
 

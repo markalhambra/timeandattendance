@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
@@ -51,6 +51,11 @@ export default function LeavePage() {
     queryKey: ['my-leaves'],
     queryFn: () => api.get('/leave/my').then((r) => r.data.data),
   });
+
+  const balanceMap = useMemo(
+    () => new Map(balances?.map((b) => [b.leaveType, b]) ?? []),
+    [balances],
+  );
 
   const fileMutation = useMutation({
     mutationFn: (body: any) => api.post('/leave', body),
@@ -114,7 +119,7 @@ export default function LeavePage() {
       {/* Leave balances */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {LEAVE_TYPES.map((lt) => {
-          const bal = balances?.find((b) => b.leaveType === lt.value);
+          const bal = balanceMap.get(lt.value);
           const avail = bal ? bal.totalDays - bal.usedDays - bal.pendingDays : 0;
           return (
             <div key={lt.value} className="card p-4">

@@ -26,12 +26,23 @@ function formatDuration(ms: number) {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
+/** Isolated timer component — only this re-renders every second, not the whole ClockWidget */
+function ElapsedTimer({ clockIn }: { clockIn: string }) {
+  const [elapsed, setElapsed] = useState(() => formatDuration(Date.now() - new Date(clockIn).getTime()));
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setElapsed(formatDuration(Date.now() - new Date(clockIn).getTime()));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [clockIn]);
+  return <span>{elapsed}</span>;
+}
+
 export default function ClockWidget() {
   const qc = useQueryClient();
   const [geo, setGeo] = useState<GeoLocation | null>(null);
   const [geoError, setGeoError] = useState<string>('');
   const [geoLoading, setGeoLoading] = useState(false);
-  const [elapsed, setElapsed] = useState('00:00:00');
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState<AttendanceStatus>('WFH');
   const [distance, setDistance] = useState<number | null>(null);
@@ -40,6 +51,7 @@ export default function ClockWidget() {
     queryKey: ['today-attendance'],
     queryFn: () => api.get('/attendance/today').then((r) => ({ data: r.data.data, missedClockOut: r.data.missedClockOut ?? null })),
     refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
   });
 
   const today = todayData?.data ?? null;
@@ -61,15 +73,6 @@ export default function ClockWidget() {
       { enableHighAccuracy: true, timeout: 15000 },
     );
   }, []);
-
-  // Live working timer
-  useEffect(() => {
-    if (!today?.clockIn || today?.clockOut) return;
-    const interval = setInterval(() => {
-      setElapsed(formatDuration(Date.now() - new Date(today.clockIn!).getTime()));
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [today]);
 
   const getLocation = useCallback((): Promise<GeoLocation> => {
     setGeoLoading(true);
@@ -178,7 +181,9 @@ export default function ClockWidget() {
         {/* Live clock */}
         <div className="text-center py-4">
           <div className="text-5xl font-mono font-black tracking-tight">
-            {hasClockedIn && !hasClockedOut ? elapsed : new Date().toLocaleTimeString('en-PH', { timeZone: 'Asia/Manila', hour: '2-digit', minute: '2-digit', hour12: false })}
+            {hasClockedIn && !hasClockedOut
+              ? <ElapsedTimer clockIn={today!.clockIn!} />
+              : new Date().toLocaleTimeString('en-PH', { timeZone: 'Asia/Manila', hour: '2-digit', minute: '2-digit', hour12: false })}
           </div>
           <div className="text-sm text-gray-500 mt-1">
             {hasClockedIn && !hasClockedOut ? 'Working time' : hasClockedOut ? 'Shift completed' : 'Not clocked in'}

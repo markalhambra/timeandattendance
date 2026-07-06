@@ -19,6 +19,7 @@ export default function DeptHeadDashboard() {
     queryKey: ['depthead-dashboard'],
     queryFn: () => api.get('/dashboard/department-head').then((r) => r.data.data),
     refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
   });
 
   const today = new Date().toLocaleDateString('en-PH', { timeZone: 'Asia/Manila', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });

@@ -65,6 +65,7 @@ export async function employeeDashboard(req: AuthRequest, res: Response): Promis
       prisma.leaveRequest.count({ where: { employeeId, status: 'PENDING' } }),
       prisma.overtimeRecord.findMany({
         where: { employeeId, status: 'APPROVED', isConverted: false, approvedExpiry: { gt: new Date() } },
+        select: { id: true, minutes: true, approvedExpiry: true, date: true, startTime: true, endTime: true, status: true, isFiled: true, pendingExpiry: true, reason: true },
       }),
       prisma.attendanceCorrection.count({ where: { employeeId, status: 'PENDING' } }),
     ]);
@@ -103,18 +104,18 @@ export async function employeeDashboard(req: AuthRequest, res: Response): Promis
 
 export async function deptHeadDashboard(req: AuthRequest, res: Response): Promise<void> {
   try {
-    const dept = await prisma.department.findFirst({ where: { headId: req.user!.sub } });
-    if (!dept) {
+    const deptId = req.user!.departmentId;
+    if (!deptId) {
       res.json({ success: true, data: { department: null, totalEmployees: 0, todayStats: { total: 0, present: 0, absent: 0, onsite: 0, wfh: 0, ob: 0 }, todayRecords: [], pendingLeaves: 0, pendingOvertimes: 0, pendingCorrections: 0 } });
       return;
     }
-    const deptId = dept.id;
 
     const today = phtToday();
 
     const where = { departmentId: deptId, isActive: true, isArchived: false };
 
-    const [employees, todayAttendance, pendingLeaves, pendingOvertime, pendingCorrections] = await Promise.all([
+    const [dept, employees, todayAttendance, pendingLeaves, pendingOvertime, pendingCorrections] = await Promise.all([
+      prisma.department.findUnique({ where: { id: deptId } }),
       prisma.employee.count({ where }),
       prisma.attendanceRecord.findMany({
         where: { date: today, employee: where },
@@ -157,13 +158,9 @@ export async function hrDashboard(_req: AuthRequest, res: Response): Promise<voi
       prisma.employee.count({ where: { isActive: true, isArchived: false } }),
       prisma.attendanceRecord.findMany({
         where: { date: today, employee: { isArchived: false } },
-        include: {
-          employee: {
-            select: {
-              firstName: true, lastName: true, employeeNumber: true,
-              department: { select: { name: true } },
-            },
-          },
+        select: {
+          status: true,
+          employee: { select: { department: { select: { name: true } } } },
         },
       }),
       prisma.leaveRequest.count({ where: { status: 'PENDING', employee: { isArchived: false } } }),
@@ -174,8 +171,8 @@ export async function hrDashboard(_req: AuthRequest, res: Response): Promise<voi
       }),
     ]);
 
-    const absentCount = totalEmployees - todayAttendance.length;
-    const notYetIn = Math.max(0, totalEmployees - todayAttendance.length);
+    const absentCount = Math.max(0, totalEmployees - todayAttendance.length);
+    const notYetIn = absentCount;
 
     res.json({
       success: true,
@@ -214,12 +211,12 @@ export async function adminDashboard(_req: AuthRequest, res: Response): Promise<
   try {
     const today = phtToday();
 
-    const [totalUsers, activeUsers, totalDepartments, totalEmployees, todayAttendance, pendingLeaves, pendingOvertime, pendingCorrections, pendingConversions, recentAuditLogs] = await Promise.all([
+    const [totalUsers, activeUsers, totalDepartments, totalEmployees, todayAttendanceCount, pendingLeaves, pendingOvertime, pendingCorrections, pendingConversions, recentAuditLogs] = await Promise.all([
       prisma.user.count(),
       prisma.user.count({ where: { isActive: true } }),
       prisma.department.count({ where: { isActive: true } }),
       prisma.employee.count({ where: { isActive: true, isArchived: false } }),
-      prisma.attendanceRecord.findMany({ where: { date: today } }),
+      prisma.attendanceRecord.count({ where: { date: today } }),
       prisma.leaveRequest.count({ where: { status: 'PENDING' } }),
       prisma.overtimeRecord.count({ where: { status: 'PENDING' } }),
       prisma.attendanceCorrection.count({ where: { status: 'PENDING' } }),
@@ -227,15 +224,19 @@ export async function adminDashboard(_req: AuthRequest, res: Response): Promise<
       prisma.auditLog.findMany({
         take: 10,
         orderBy: { createdAt: 'desc' },
-        include: {
+        select: {
+          id: true, action: true, entity: true, entityId: true, createdAt: true,
           user: {
-            include: { employee: { select: { firstName: true, lastName: true } } },
+            select: {
+              email: true,
+              employee: { select: { firstName: true, lastName: true } },
+            },
           },
         },
       }),
     ]);
 
-    const absentCount = totalEmployees - todayAttendance.length;
+    const absentCount = totalEmployees - todayAttendanceCount;
 
     res.json({
       success: true,
@@ -244,8 +245,8 @@ export async function adminDashboard(_req: AuthRequest, res: Response): Promise<
         activeUsers,
         totalDepartments,
         todayAttendance: {
-          total: todayAttendance.length,
-          present: todayAttendance.length,
+          total: todayAttendanceCount,
+          present: todayAttendanceCount,
           absent: absentCount,
         },
         pendingRequests: {

@@ -35,6 +35,7 @@ export default function EmployeeDashboard() {
     queryKey: ['employee-dashboard'],
     queryFn: () => api.get('/dashboard/employee').then((r) => r.data.data),
     refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
   });
 
   const leaveTypeLabels: Record<string, string> = {

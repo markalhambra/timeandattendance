@@ -11,6 +11,7 @@ export interface JwtPayload {
   sub: string;      // userId
   role: string;
   employeeId?: string;
+  departmentId?: string; // cached from employee.departmentId — avoids per-request DB lookup
   iat?: number;
   exp?: number;
 }

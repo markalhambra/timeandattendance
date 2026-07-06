@@ -335,13 +335,21 @@ export async function getMyCorrections(req: AuthRequest, res: Response): Promise
   const employeeId = req.user!.employeeId;
   if (!employeeId) { res.status(400).json({ success: false, message: 'Employee not found.' }); return; }
 
+  const { page = '1', limit = '50' } = req.query as Record<string, string>;
+  const skip = (parseInt(page) - 1) * parseInt(limit);
+
   try {
-    const corrections = await prisma.attendanceCorrection.findMany({
-      where: { employeeId },
-      include: { attendance: true },
-      orderBy: { createdAt: 'desc' },
-    });
-    res.json({ success: true, data: corrections });
+    const [corrections, total] = await Promise.all([
+      prisma.attendanceCorrection.findMany({
+        where: { employeeId },
+        include: { attendance: { select: { date: true, clockIn: true, clockOut: true } } },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: parseInt(limit),
+      }),
+      prisma.attendanceCorrection.count({ where: { employeeId } }),
+    ]);
+    res.json({ success: true, data: corrections, meta: { total, page: parseInt(page), limit: parseInt(limit) } });
   } catch {
     res.status(500).json({ success: false, message: 'Failed to fetch corrections.' });
   }
@@ -357,9 +365,9 @@ export async function getCorrections(req: AuthRequest, res: Response): Promise<v
 
     // Dept heads only see their department
     if (req.user!.role === 'DEPARTMENT_HEAD') {
-      const dept = await prisma.department.findFirst({ where: { headId: req.user!.sub } });
-      if (!dept) { res.json({ success: true, data: [], meta: { total: 0, page: parseInt(page), limit: parseInt(limit) } }); return; }
-      where.employee = { departmentId: dept.id };
+      const deptId = req.user!.departmentId;
+      if (!deptId) { res.json({ success: true, data: [], meta: { total: 0, page: parseInt(page), limit: parseInt(limit) } }); return; }
+      where.employee = { departmentId: deptId };
     } else if (departmentId) {
       where.employee = { departmentId };
     }
@@ -398,8 +406,8 @@ export async function reviewCorrection(req: AuthRequest, res: Response): Promise
     if (!correction) { res.status(404).json({ success: false, message: 'Correction not found.' }); return; }
     // Ensure dept head only reviews their own department's corrections
     if (req.user!.role === 'DEPARTMENT_HEAD') {
-      const dept = await prisma.department.findFirst({ where: { headId: req.user!.sub } });
-      if (!dept || correction.employee.departmentId !== dept.id) {
+      const deptId = req.user!.departmentId;
+      if (!deptId || correction.employee.departmentId !== deptId) {
         res.status(403).json({ success: false, message: 'You can only review corrections from your department.' }); return;
       }
     }
@@ -537,19 +545,20 @@ export async function getEmployeeAttendance(req: AuthRequest, res: Response): Pr
 
 export async function getAbsentToday(req: AuthRequest, res: Response): Promise<void> {
   try {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const today = phtToday();
 
-    const employees = await prisma.employee.findMany({
-      where: { isActive: true },
+    const absent = await prisma.employee.findMany({
+      where: {
+        isActive: true,
+        isArchived: false,
+        NOT: { attendanceRecords: { some: { date: today } } },
+      },
       select: {
         id: true, firstName: true, lastName: true, employeeNumber: true,
         department: { select: { name: true } },
-        attendanceRecords: { where: { date: today }, select: { id: true, clockIn: true } },
       },
     });
 
-    const absent = employees.filter((e) => e.attendanceRecords.length === 0);
     res.json({ success: true, data: absent });
   } catch {
     res.status(500).json({ success: false, message: 'Failed to fetch absent employees.' });

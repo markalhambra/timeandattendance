@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../services/api';
 import { Department } from '../../types';
@@ -24,6 +24,7 @@ export default function HRDashboard() {
     queryKey: ['hr-dashboard'],
     queryFn: () => api.get('/dashboard/hr').then((r) => r.data.data),
     refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
   });
 
   const today = new Date().toLocaleDateString('en-PH', { timeZone: 'Asia/Manila', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
@@ -71,7 +72,7 @@ export default function HRDashboard() {
     MAGNA_CARTA_WOMEN: 'Magna Carta for Women Leave',
   };
 
-  const allItems: any[] = [
+  const allItems: any[] = useMemo(() => [
     ...(schedLeaves ?? []).map((l: any) => ({
       key: `l-${l.id}`, kind: 'leave',
       employee: `${l.employee?.firstName ?? ''} ${l.employee?.lastName ?? ''}`.trim(),
@@ -90,7 +91,7 @@ export default function HRDashboard() {
       sortDate: c.scheduledDate,
       badge: c.conversionType === 'CTO' ? 'bg-amber-50 text-amber-700' : 'bg-orange-50 text-orange-700',
     })),
-  ].sort((a, b) => a.sortDate.localeCompare(b.sortDate));
+  ].sort((a, b) => (a.sortDate < b.sortDate ? -1 : a.sortDate > b.sortDate ? 1 : 0)), [schedLeaves, schedConversions]);
 
   const t = data?.todayStats;
   const pendingTotal = (data?.pendingLeaves || 0) + (data?.pendingOvertimes || 0) + (data?.pendingConversions || 0);

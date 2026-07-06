@@ -199,10 +199,10 @@ export async function getAllLeaves(req: AuthRequest, res: Response): Promise<voi
       if (startDate) where.endDate.gte = new Date(startDate);
     }
     if (req.user!.role === 'DEPARTMENT_HEAD') {
-      const dept = await prisma.department.findFirst({ where: { headId: req.user!.sub } });
-      if (!dept) { res.json({ success: true, data: [], meta: { total: 0, page: parseInt(page), limit: parseInt(limit) } }); return; }
+      const deptId = req.user!.departmentId;
+      if (!deptId) { res.json({ success: true, data: [], meta: { total: 0, page: parseInt(page), limit: parseInt(limit) } }); return; }
       // Exclude the dept head's own leave — those go to HR
-      where.employee = { departmentId: dept.id, userId: { not: req.user!.sub } };
+      where.employee = { departmentId: deptId, userId: { not: req.user!.sub } };
       if (req.query.reviewed === 'true') {
         // History: leaves already finalized
         delete where.status;
@@ -256,8 +256,8 @@ export async function reviewLeave(req: AuthRequest, res: Response): Promise<void
       if (leave.employee.userId === req.user!.sub) {
         res.status(403).json({ success: false, message: 'You cannot approve your own leave. Please contact HR.' }); return;
       }
-      const dept = await prisma.department.findFirst({ where: { headId: req.user!.sub } });
-      if (!dept || leave.employee.departmentId !== dept.id) {
+      const deptId = req.user!.departmentId;
+      if (!deptId || leave.employee.departmentId !== deptId) {
         res.status(403).json({ success: false, message: 'You can only review leaves from your department.' }); return;
       }
     }

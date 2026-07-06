@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, memo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../services/api';
 import { Department, Employee } from '../../types';
@@ -7,6 +7,40 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import * as XLSX from 'xlsx';
 
 type ReportType = 'attendance' | 'leave' | 'overtime' | 'absence';
+
+interface ReportChartProps { reportData: any; reportType: ReportType; startDate: string; endDate: string; }
+
+const ReportChart = memo(function ReportChart({ reportData, reportType, startDate, endDate }: ReportChartProps) {
+  if (!reportData || !Array.isArray(reportData.chartData)) return null;
+  return (
+    <div className="card p-6">
+      <h2 className="font-semibold text-sm mb-4">
+        {reportType.charAt(0).toUpperCase() + reportType.slice(1)} Summary — {startDate} to {endDate}
+      </h2>
+      <ResponsiveContainer width="100%" height={240}>
+        {reportType === 'attendance' ? (
+          <BarChart data={reportData.chartData}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+            <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+            <YAxis tick={{ fontSize: 11 }} />
+            <Tooltip />
+            <Bar dataKey="onsite" name="On-Site" fill="#000" />
+            <Bar dataKey="wfh" name="WFH" fill="#6b7280" />
+            <Bar dataKey="ob" name="OB" fill="#9ca3af" />
+          </BarChart>
+        ) : (
+          <LineChart data={reportData.chartData}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+            <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+            <YAxis tick={{ fontSize: 11 }} />
+            <Tooltip />
+            <Line type="monotone" dataKey="count" stroke="#000" strokeWidth={2} dot={false} />
+          </LineChart>
+        )}
+      </ResponsiveContainer>
+    </div>
+  );
+});
 
 export default function ReportsPage() {
   const [reportType, setReportType] = useState<ReportType>('attendance');
@@ -121,34 +155,9 @@ export default function ReportsPage() {
       {/* Chart */}
       {isLoading ? (
         <div className="h-64 bg-gray-100 rounded-xl animate-pulse" />
-      ) : reportData && Array.isArray(reportData.chartData) ? (
-        <div className="card p-6">
-          <h2 className="font-semibold text-sm mb-4">
-            {reportType.charAt(0).toUpperCase() + reportType.slice(1)} Summary — {startDate} to {endDate}
-          </h2>
-          <ResponsiveContainer width="100%" height={240}>
-            {reportType === 'attendance' ? (
-              <BarChart data={reportData.chartData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} />
-                <Tooltip />
-                <Bar dataKey="onsite" name="On-Site" fill="#000" />
-                <Bar dataKey="wfh" name="WFH" fill="#6b7280" />
-                <Bar dataKey="ob" name="OB" fill="#9ca3af" />
-              </BarChart>
-            ) : (
-              <LineChart data={reportData.chartData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} />
-                <Tooltip />
-                <Line type="monotone" dataKey="count" stroke="#000" strokeWidth={2} dot={false} />
-              </LineChart>
-            )}
-          </ResponsiveContainer>
-        </div>
-      ) : null}
+      ) : (
+        <ReportChart reportData={reportData} reportType={reportType} startDate={startDate} endDate={endDate} />
+      )}
 
       {/* Summary table */}
       {reportData?.summary && (

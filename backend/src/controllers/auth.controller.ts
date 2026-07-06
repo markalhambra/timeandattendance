@@ -30,6 +30,7 @@ export async function login(req: Request, res: Response): Promise<void> {
       sub: user.id,
       role: user.role,
       employeeId: user.employee?.id,
+      departmentId: user.employee?.department?.id,
     };
 
     const accessToken = signAccessToken(payload);
@@ -106,8 +107,8 @@ export async function refreshToken(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    const employee = await prisma.employee.findUnique({ where: { userId: user.id }, select: { id: true } });
-    const newPayload = { sub: user.id, role: user.role, employeeId: employee?.id };
+    const employee = await prisma.employee.findUnique({ where: { userId: user.id }, select: { id: true, departmentId: true } });
+    const newPayload = { sub: user.id, role: user.role, employeeId: employee?.id, departmentId: employee?.departmentId ?? undefined };
     const accessToken = signAccessToken(newPayload);
     const newRefreshToken = signRefreshToken(newPayload);
 

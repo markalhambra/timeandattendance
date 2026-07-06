@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../services/api';
 import { LeaveRequest, OvertimeRecord, AttendanceCorrection, OvertimeConversion } from '../../types';
@@ -16,11 +16,12 @@ export default function ApprovalsPage() {
   const [notes, setNotes] = useState('');
   const [showHistory, setShowHistory] = useState(false);
 
-  useEffect(() => { setShowHistory(false); }, [tab]);
-
-  const invalidateAll = () => {
-    ['dept-leaves', 'dept-overtime', 'dept-corrections', 'dept-conversions',
-     'dept-leaves-history', 'dept-overtime-all', 'dept-corrections-all', 'my-attendance', 'my-corrections'].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
+  const invalidateForTab = (type: Tab) => {
+    // Invalidate only the queries relevant to the tab that was just reviewed
+    const pendingKey = ({ leaves: 'dept-leaves', overtime: 'dept-overtime', corrections: 'dept-corrections', conversions: 'dept-conversions' } as Record<Tab, string>)[type];
+    const historyKey = ({ leaves: 'dept-leaves-history', overtime: 'dept-overtime-all', corrections: 'dept-corrections-all', conversions: 'dept-conversions' } as Record<Tab, string>)[type];
+    qc.invalidateQueries({ queryKey: [pendingKey] });
+    qc.invalidateQueries({ queryKey: [historyKey] });
     qc.invalidateQueries({ queryKey: ['depthead-dashboard'] });
   };
 
@@ -57,7 +58,7 @@ export default function ApprovalsPage() {
       };
       return api.patch(endpoints[type], { status: action, notes });
     },
-    onSuccess: () => { toast.success('Decision recorded.'); setModal(null); setNotes(''); invalidateAll(); },
+    onSuccess: (_, variables) => { toast.success('Decision recorded.'); setModal(null); setNotes(''); invalidateForTab(variables.type); },
     onError: (err: any) => toast.error(err?.response?.data?.message || 'Failed to process.'),
   });
 

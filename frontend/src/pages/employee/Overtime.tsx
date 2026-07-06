@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../services/api';
 import { OvertimeRecord, OvertimeConversion, OvertimeConversionType } from '../../types';
@@ -61,10 +61,15 @@ export default function OvertimePage() {
     setHoursToConvert('');
   };
 
-  const selectedTotal = selectedRecords.reduce((sum, id) => {
-    const r = credits?.records?.find((r) => r.id === id);
-    return sum + (r?.minutes || 0);
-  }, 0);
+  const recordsMap = useMemo(
+    () => new Map(credits?.records?.map((r) => [r.id, r]) ?? []),
+    [credits?.records],
+  );
+
+  const selectedTotal = useMemo(
+    () => selectedRecords.reduce((sum, id) => sum + (recordsMap.get(id)?.minutes ?? 0), 0),
+    [selectedRecords, recordsMap],
+  );
 
   const minutesToConvert = hoursToConvert ? Math.round(parseFloat(hoursToConvert) * 60) : selectedTotal;
   const minMinutes = convType === 'CTO' ? 240 : 480;

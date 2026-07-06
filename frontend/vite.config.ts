@@ -26,7 +26,8 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
         runtimeCaching: [
           {
-            urlPattern: /^https:\/\/api\./,
+            // Matches both same-origin /api/* and external https://api.* hosts
+            urlPattern: /\/api\//,
             handler: 'NetworkFirst',
             options: { cacheName: 'api-cache' },
           },
@@ -36,6 +37,24 @@ export default defineConfig({
   ],
   resolve: {
     alias: { '@': path.resolve(__dirname, './src') },
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // Core React runtime — cached long-term, changes rarely
+          vendor: ['react', 'react-dom', 'react-router-dom'],
+          // Heavy chart library — only loaded on Reports page
+          charts: ['recharts'],
+          // Leaflet map library — only loaded on pages with LocationMap
+          maps: ['react-leaflet', 'leaflet'],
+          // XLSX export — only loaded when user exports
+          xlsx: ['xlsx'],
+          // React Query — shared but separate from app code
+          query: ['@tanstack/react-query'],
+        },
+      },
+    },
   },
   server: {
     port: 3000,

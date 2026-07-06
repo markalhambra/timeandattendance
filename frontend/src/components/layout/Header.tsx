@@ -17,6 +17,7 @@ export default function Header({ onMenuClick }: Props) {
     queryKey: ['unread-count'],
     queryFn: () => api.get('/notifications/unread-count').then((r) => r.data.data.count as number),
     refetchInterval: 30_000,
+    refetchIntervalInBackground: false,
   });
 
   const { data: notifsData, refetch } = useQuery({
