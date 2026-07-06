@@ -166,10 +166,6 @@ export default function OvertimePage() {
                           </button>
                         ) : r.isConverted ? (
                           <span className="text-xs text-gray-400">Converted</span>
-                        ) : r.isFiled && r.reason?.startsWith('Auto-filed') ? (
-                          <span className="inline-flex items-center gap-1 text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full font-medium">
-                            Auto-filed
-                          </span>
                         ) : null}
                       </td>
                     </tr>

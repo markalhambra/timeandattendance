@@ -160,11 +160,11 @@ export async function clockOut(req: AuthRequest, res: Response): Promise<void> {
       },
     });
 
-    // Auto-generate overtime record — auto-filed so HR/dept heads see it immediately for approval
+    // Auto-generate overtime record (draft — employee must click "File OT" before HR/dept head can see it)
     if (overtimeMinutes > 0) {
       const pendingExpiry = new Date();
       pendingExpiry.setMonth(pendingExpiry.getMonth() + 3);
-      const otRecord = await prisma.overtimeRecord.create({
+      await prisma.overtimeRecord.create({
         data: {
           employeeId,
           attendanceId: record.id,
@@ -172,13 +172,10 @@ export async function clockOut(req: AuthRequest, res: Response): Promise<void> {
           startTime: record.clockIn,
           endTime: now,
           minutes: overtimeMinutes,
-          reason: 'Auto-filed: exceeded 9 hours',
-          isFiled: true,
+          reason: 'Auto-generated from attendance',
           pendingExpiry,
         },
       });
-      // Fire-and-forget notification to dept head
-      notificationService.notifyDeptHead(employeeId, 'OVERTIME_REQUEST', { overtimeId: otRecord.id }).catch(() => {});
     }
 
     // Fire-and-forget audit log — don't block the response
@@ -454,7 +451,7 @@ export async function reviewCorrection(req: AuthRequest, res: Response): Promise
       if (newOvertimeMinutes > 0 && effectiveClockIn && effectiveClockOut) {
         const pendingExpiry = new Date();
         pendingExpiry.setMonth(pendingExpiry.getMonth() + 3);
-        const corrOtRecord = await prisma.overtimeRecord.create({
+        await prisma.overtimeRecord.create({
           data: {
             employeeId: correction.employeeId,
             attendanceId: correction.attendanceId,
@@ -462,12 +459,10 @@ export async function reviewCorrection(req: AuthRequest, res: Response): Promise
             startTime: effectiveClockIn,
             endTime: effectiveClockOut,
             minutes: newOvertimeMinutes,
-            reason: 'Auto-filed via attendance correction',
-            isFiled: true,
+            reason: 'Updated via attendance correction',
             pendingExpiry,
           },
         });
-        notificationService.notifyDeptHead(correction.employeeId, 'OVERTIME_REQUEST', { overtimeId: corrOtRecord.id }).catch(() => {});
       }
     }
 

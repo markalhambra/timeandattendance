@@ -225,13 +225,13 @@ export async function getAllOvertime(req: AuthRequest, res: Response): Promise<v
   try {
     const where: any = {};
     if (status) where.status = status;
+    // Always filter to formally filed records only — drafts are private to the employee
+    where.isFiled = true;
     if (req.user!.role === 'DEPARTMENT_HEAD') {
       const deptId = req.user!.departmentId;
       if (!deptId) { res.json({ success: true, data: [], meta: { total: 0 } }); return; }
       // Exclude the dept head's own overtime — those go to HR
       where.employee = { departmentId: deptId, userId: { not: req.user!.sub } };
-      // Only show formally filed requests (not auto-created drafts)
-      where.isFiled = true;
     } else if (departmentId) {
       where.employee = { departmentId };
     }
