@@ -72,7 +72,7 @@ export async function cronExpirePendingOvertime(req: Request, res: Response): Pr
   try {
     const expired = await prisma.overtimeRecord.updateMany({
       where: { status: 'PENDING', pendingExpiry: { lt: new Date() } },
-      data: { status: 'REJECTED', reviewerNotes: 'Automatically expired after 3 months.' },
+      data: { status: 'REJECTED', reviewerNotes: 'Automatically expired after 1 month.' },
     });
     logger.info(`Cron expire-pending-overtime: expired ${expired.count} records.`);
     res.json({ success: true, expired: expired.count });
@@ -88,7 +88,7 @@ export async function cronExpireApprovedOvertime(req: Request, res: Response): P
   try {
     const expired = await prisma.overtimeRecord.updateMany({
       where: { status: 'APPROVED', isConverted: false, approvedExpiry: { lt: new Date() } },
-      data: { status: 'REJECTED', reviewerNotes: 'Automatically expired after 12 months.' },
+      data: { status: 'REJECTED', reviewerNotes: 'Automatically expired after 6 months.' },
     });
     logger.info(`Cron expire-approved-overtime: expired ${expired.count} records.`);
     res.json({ success: true, expired: expired.count });
@@ -103,17 +103,17 @@ export async function cronDailyMaintenance(req: Request, res: Response): Promise
   if (!verifyCronAuth(req, res)) return;
   const results = { expiredPending: 0, expiredApproved: 0, alerted: 0 };
   try {
-    // 1. Expire pending overtime (>3 months)
+    // 1. Expire pending overtime (>1 month)
     const expiredPending = await prisma.overtimeRecord.updateMany({
       where: { status: 'PENDING', pendingExpiry: { lt: new Date() } },
-      data: { status: 'REJECTED', reviewerNotes: 'Automatically expired after 3 months.' },
+      data: { status: 'REJECTED', reviewerNotes: 'Automatically expired after 1 month.' },
     });
     results.expiredPending = expiredPending.count;
 
-    // 2. Expire approved overtime (>12 months)
+    // 2. Expire approved overtime (>6 months)
     const expiredApproved = await prisma.overtimeRecord.updateMany({
       where: { status: 'APPROVED', isConverted: false, approvedExpiry: { lt: new Date() } },
-      data: { status: 'REJECTED', reviewerNotes: 'Automatically expired after 12 months.' },
+      data: { status: 'REJECTED', reviewerNotes: 'Automatically expired after 6 months.' },
     });
     results.expiredApproved = expiredApproved.count;
 
@@ -132,6 +132,7 @@ export async function cronDailyMaintenance(req: Request, res: Response): Promise
         `Your overtime credit of ${(ot.minutes / 60).toFixed(1)} hours expires in 7 days.`,
         { overtimeId: ot.id, expiresAt: ot.approvedExpiry },
       );
+      await notificationService.sendExpirationAlertEmail(ot.employee.user.email, ot.minutes, ot.approvedExpiry!);
     }
     results.alerted = expiring.length;
 
@@ -167,6 +168,7 @@ export async function cronExpirationAlerts(req: Request, res: Response): Promise
         `Your overtime credit of ${(ot.minutes / 60).toFixed(1)} hours expires in 7 days.`,
         { overtimeId: ot.id, expiresAt: ot.approvedExpiry },
       );
+      await notificationService.sendExpirationAlertEmail(ot.employee.user.email, ot.minutes, ot.approvedExpiry!);
     }
     logger.info(`Cron expiration-alerts: alerted ${expiring.length} employees.`);
     res.json({ success: true, alerted: expiring.length });

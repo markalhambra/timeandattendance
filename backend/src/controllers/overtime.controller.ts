@@ -291,7 +291,7 @@ export async function reviewOvertime(req: AuthRequest, res: Response): Promise<v
 
     if (status === 'APPROVED') {
       const expiry = new Date();
-      expiry.setFullYear(expiry.getFullYear() + 1);
+      expiry.setMonth(expiry.getMonth() + 6);
       updateData.approvedExpiry = expiry;
     }
 
@@ -304,6 +304,7 @@ export async function reviewOvertime(req: AuthRequest, res: Response): Promise<v
     await notificationService.notifyEmployee(overtime.employeeId, 'APPROVAL_RESULT', {
       type: 'Overtime Request',
       status,
+      reviewer: req.user!.role === 'DEPARTMENT_HEAD' ? 'Department Head' : req.user!.role,
     });
 
     prisma.auditLog.create({
@@ -419,6 +420,7 @@ export async function reviewConversion(req: AuthRequest, res: Response): Promise
     await notificationService.notifyEmployee(conversion.employeeId, 'APPROVAL_RESULT', {
       type: `${conversion.conversionType} Conversion`,
       status,
+      reviewer: role === 'DEPARTMENT_HEAD' ? 'Department Head' : role,
     });
 
     prisma.auditLog.create({

@@ -183,7 +183,8 @@ export async function forgotPassword(req: Request, res: Response): Promise<void>
     });
 
     res.json({ success: true, message: 'If the email exists, a reset link has been sent.' });
-  } catch {
+  } catch (err) {
+    logger.error('Forgot password error:', err);
     res.status(500).json({ success: false, message: 'Failed to process request.' });
   }
 }
@@ -215,7 +216,8 @@ export async function resetPassword(req: Request, res: Response): Promise<void> 
     });
 
     res.json({ success: true, message: 'Password reset successful.' });
-  } catch {
+  } catch (err) {
+    logger.error('Reset password error:', err);
     res.status(500).json({ success: false, message: 'Failed to reset password.' });
   }
 }
@@ -236,7 +238,8 @@ export async function changePassword(req: AuthRequest, res: Response): Promise<v
     });
 
     res.json({ success: true, message: 'Password changed successfully.' });
-  } catch {
+  } catch (err) {
+    logger.error('Change password error:', err);
     res.status(500).json({ success: false, message: 'Failed to change password.' });
   }
 }

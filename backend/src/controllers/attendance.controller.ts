@@ -163,7 +163,7 @@ export async function clockOut(req: AuthRequest, res: Response): Promise<void> {
     // Auto-generate overtime record (draft — employee must click "File OT" before HR/dept head can see it)
     if (overtimeMinutes > 0) {
       const pendingExpiry = new Date();
-      pendingExpiry.setMonth(pendingExpiry.getMonth() + 3);
+      pendingExpiry.setMonth(pendingExpiry.getMonth() + 1);
       await prisma.overtimeRecord.create({
         data: {
           employeeId,
@@ -463,7 +463,7 @@ export async function reviewCorrection(req: AuthRequest, res: Response): Promise
       const newOvertimeMinutes = updateData.overtimeMinutes ?? 0;
       if (newOvertimeMinutes > 0 && effectiveClockIn && effectiveClockOut) {
         const pendingExpiry = new Date();
-        pendingExpiry.setMonth(pendingExpiry.getMonth() + 3);
+        pendingExpiry.setMonth(pendingExpiry.getMonth() + 1);
         await prisma.overtimeRecord.create({
           data: {
             employeeId: correction.employeeId,
@@ -482,6 +482,7 @@ export async function reviewCorrection(req: AuthRequest, res: Response): Promise
     await notificationService.notifyEmployee(correction.employeeId, 'APPROVAL_RESULT', {
       type: 'Attendance Correction',
       status,
+      reviewer: req.user!.role === 'DEPARTMENT_HEAD' ? 'Department Head' : req.user!.role,
     });
 
     prisma.auditLog.create({

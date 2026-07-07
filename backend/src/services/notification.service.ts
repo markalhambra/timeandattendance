@@ -77,12 +77,26 @@ function approvalEmail(typeName: string, status: string, reviewer: string, date:
   );
 }
 
+function expirationAlertEmail(hours: string, expiresAt: string): string {
+  return emailBase(
+    'Overtime Credit Expiring Soon',
+    `<p style="color:#555;font-size:15px;line-height:1.7;margin:0 0 16px;">
+      Your overtime credit of <strong>${hours} hours</strong> will expire on <strong>${expiresAt}</strong>.
+    </p>
+    <p style="color:#555;font-size:15px;line-height:1.7;margin:0 0 24px;">
+      Please convert your remaining credits to leave (CTO/CDO) before they expire.
+    </p>
+    <a href="${APP_URL}" style="display:inline-block;background:#000;color:#fff;padding:13px 28px;border-radius:8px;text-decoration:none;font-size:14px;font-weight:bold;">Convert Now →</a>`,
+  );
+}
+
 // ─── Email notification types that trigger emails to approvers ───────────────
 const APPROVER_EMAIL_TYPES: Partial<Record<string, string>> = {
-  LEAVE_REQUEST:    'Leave Request',
-  OVERTIME_REQUEST: 'Overtime Request',
-  CTO_REQUEST:      'CTO Conversion Request',
-  CDO_REQUEST:      'CDO Conversion Request',
+  LEAVE_REQUEST:         'Leave Request',
+  OVERTIME_REQUEST:      'Overtime Request',
+  CTO_REQUEST:           'CTO Conversion Request',
+  CDO_REQUEST:           'CDO Conversion Request',
+  ATTENDANCE_CORRECTION: 'Attendance Correction',
 };
 
 // ─── Service ─────────────────────────────────────────────────────────────────
@@ -100,6 +114,16 @@ export const notificationService = {
     } catch (err) {
       logger.error('Email send failed:', err);
     }
+  },
+
+  async sendExpirationAlertEmail(email: string, minutes: number, expiresAt: Date): Promise<void> {
+    const hours = (minutes / 60).toFixed(1);
+    const formattedDate = expiresAt.toLocaleDateString('en-PH', { timeZone: 'Asia/Manila', dateStyle: 'long' });
+    await this.sendEmail(
+      email,
+      'Overtime Credit Expiring Soon — ALPAS TAMS',
+      expirationAlertEmail(hours, formattedDate),
+    );
   },
 
   async sendPasswordResetEmail(email: string, token: string): Promise<void> {

@@ -44,7 +44,7 @@ export function scheduleCronJobs(): void {
           status: 'PENDING',
           pendingExpiry: { lt: new Date() },
         },
-        data: { status: 'REJECTED', reviewerNotes: 'Automatically expired after 3 months.' },
+        data: { status: 'REJECTED', reviewerNotes: 'Automatically expired after 1 month.' },
       });
       if (expired.count > 0) logger.info(`Expired ${expired.count} pending overtime records.`);
     } catch (err) {
@@ -62,7 +62,7 @@ export function scheduleCronJobs(): void {
           isConverted: false,
           approvedExpiry: { lt: new Date() },
         },
-        data: { status: 'REJECTED', reviewerNotes: 'Automatically expired after 12 months.' },
+        data: { status: 'REJECTED', reviewerNotes: 'Automatically expired after 6 months.' },
       });
       if (expired.count > 0) logger.info(`Expired ${expired.count} approved overtime records.`);
     } catch (err) {
@@ -94,6 +94,7 @@ export function scheduleCronJobs(): void {
           `Your overtime credit of ${(ot.minutes / 60).toFixed(1)} hours expires in 7 days.`,
           { overtimeId: ot.id, expiresAt: ot.approvedExpiry },
         );
+        await notificationService.sendExpirationAlertEmail(ot.employee.user.email, ot.minutes, ot.approvedExpiry!);
       }
     } catch (err) {
       logger.error('Expiration alert cron error:', err);
