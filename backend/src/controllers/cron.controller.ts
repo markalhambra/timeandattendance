@@ -98,10 +98,11 @@ export async function cronExpireApprovedOvertime(req: Request, res: Response): P
   }
 }
 
-// GET /api/cron/daily-maintenance  — runs daily at 00:00 UTC (combines expire-pending, expire-approved, expiration-alerts)
+// GET /api/cron/daily-maintenance  — runs daily at 00:00 UTC (= 08:00 PHT)
+// Combines: expire-pending OT, expire-approved OT, expiration-alerts, and monthly VL accrual (1st of month PHT)
 export async function cronDailyMaintenance(req: Request, res: Response): Promise<void> {
   if (!verifyCronAuth(req, res)) return;
-  const results = { expiredPending: 0, expiredApproved: 0, alerted: 0 };
+  const results: Record<string, number> = { expiredPending: 0, expiredApproved: 0, alerted: 0, vlAccrued: 0 };
   try {
     // 1. Expire pending overtime (>1 month)
     const expiredPending = await prisma.overtimeRecord.updateMany({
@@ -117,26 +118,73 @@ export async function cronDailyMaintenance(req: Request, res: Response): Promise
     });
     results.expiredApproved = expiredApproved.count;
 
-    // 3. Expiration alerts (7-day warning)
+    // 3. Expiration alerts (7-day warning) — parallel to stay within 10s Hobby limit
     const in7Days = new Date();
     in7Days.setDate(in7Days.getDate() + 7);
     const expiring = await prisma.overtimeRecord.findMany({
       where: { status: 'APPROVED', isConverted: false, approvedExpiry: { lte: in7Days, gt: new Date() } },
       include: { employee: { include: { user: true } } },
     });
-    for (const ot of expiring) {
-      await notificationService.createNotification(
-        ot.employee.userId,
-        'EXPIRATION_ALERT',
-        'Overtime Credit Expiring Soon',
-        `Your overtime credit of ${(ot.minutes / 60).toFixed(1)} hours expires in 7 days.`,
-        { overtimeId: ot.id, expiresAt: ot.approvedExpiry },
-      );
-      try {
-        await notificationService.sendExpirationAlertEmail(ot.employee.user.email, ot.minutes, ot.approvedExpiry!);
-      } catch { /* already logged inside sendEmail */ }
-    }
+    await Promise.allSettled(
+      expiring.map(async (ot) => {
+        await notificationService.createNotification(
+          ot.employee.userId,
+          'EXPIRATION_ALERT',
+          'Overtime Credit Expiring Soon',
+          `Your overtime credit of ${(ot.minutes / 60).toFixed(1)} hours expires in 7 days.`,
+          { overtimeId: ot.id, expiresAt: ot.approvedExpiry },
+        );
+        try {
+          await notificationService.sendExpirationAlertEmail(ot.employee.user.email, ot.minutes, ot.approvedExpiry!);
+        } catch { /* already logged inside sendEmail */ }
+      }),
+    );
     results.alerted = expiring.length;
+
+    // 4. Monthly VL accrual — runs only on the 1st of the month (PHT)
+    //    Merged here to stay within Vercel Hobby's 2-cron limit.
+    const phtNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Manila' }));
+    if (phtNow.getDate() === 1) {
+      const year = phtNow.getFullYear();
+      const monthStr = String(phtNow.getMonth() + 1).padStart(2, '0');
+      const accrualReason = `VL Monthly Accrual — ${year}-${monthStr}`;
+      const ACCRUAL_AMOUNT = 1.25;
+
+      const employees = await prisma.employee.findMany({
+        where: { employmentType: 'REGULAR', isActive: true, isArchived: false },
+        select: { id: true },
+      });
+
+      let accrued = 0;
+      for (const emp of employees) {
+        const alreadyRan = await prisma.leaveAdjustment.count({
+          where: { employeeId: emp.id, isSystemGenerated: true, leaveType: 'VACATION', year, reason: accrualReason },
+        });
+        if (alreadyRan > 0) continue;
+
+        const balance = await prisma.leaveBalance.findUnique({
+          where: { employeeId_year_leaveType: { employeeId: emp.id, year, leaveType: 'VACATION' } },
+        });
+        const previousBalance = balance ? balance.totalDays - balance.usedDays - balance.pendingDays : 0;
+
+        await prisma.leaveBalance.upsert({
+          where: { employeeId_year_leaveType: { employeeId: emp.id, year, leaveType: 'VACATION' } },
+          update: { totalDays: { increment: ACCRUAL_AMOUNT } },
+          create: { employeeId: emp.id, year, leaveType: 'VACATION', totalDays: ACCRUAL_AMOUNT },
+        });
+        await prisma.leaveAdjustment.create({
+          data: {
+            employeeId: emp.id, leaveType: 'VACATION', year,
+            adjustmentAmount: ACCRUAL_AMOUNT, previousBalance,
+            newBalance: previousBalance + ACCRUAL_AMOUNT,
+            reason: accrualReason, adjustedBy: null, isSystemGenerated: true,
+          },
+        });
+        accrued++;
+      }
+      results.vlAccrued = accrued;
+      logger.info(`VL accrual (via daily-maintenance): ${accrued}/${employees.length} employees credited.`);
+    }
 
     logger.info(`Cron daily-maintenance: ${JSON.stringify(results)}`);
     res.json({ success: true, ...results });
@@ -162,18 +210,20 @@ export async function cronExpirationAlerts(req: Request, res: Response): Promise
       include: { employee: { include: { user: true } } },
     });
 
-    for (const ot of expiring) {
-      await notificationService.createNotification(
-        ot.employee.userId,
-        'EXPIRATION_ALERT',
-        'Overtime Credit Expiring Soon',
-        `Your overtime credit of ${(ot.minutes / 60).toFixed(1)} hours expires in 7 days.`,
-        { overtimeId: ot.id, expiresAt: ot.approvedExpiry },
-      );
-      try {
-        await notificationService.sendExpirationAlertEmail(ot.employee.user.email, ot.minutes, ot.approvedExpiry!);
-      } catch { /* already logged inside sendEmail */ }
-    }
+    await Promise.allSettled(
+      expiring.map(async (ot) => {
+        await notificationService.createNotification(
+          ot.employee.userId,
+          'EXPIRATION_ALERT',
+          'Overtime Credit Expiring Soon',
+          `Your overtime credit of ${(ot.minutes / 60).toFixed(1)} hours expires in 7 days.`,
+          { overtimeId: ot.id, expiresAt: ot.approvedExpiry },
+        );
+        try {
+          await notificationService.sendExpirationAlertEmail(ot.employee.user.email, ot.minutes, ot.approvedExpiry!);
+        } catch { /* already logged inside sendEmail */ }
+      }),
+    );
     logger.info(`Cron expiration-alerts: alerted ${expiring.length} employees.`);
     res.json({ success: true, alerted: expiring.length });
   } catch (err) {

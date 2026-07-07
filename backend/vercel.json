@@ -4,7 +4,7 @@
     {
       "src": "api/index.ts",
       "use": "@vercel/node",
-      "config": { "maxDuration": 60 }
+      "config": { "maxDuration": 10 }
     }
   ],
   "routes": [
@@ -21,10 +21,6 @@
     {
       "path": "/api/cron/daily-maintenance",
       "schedule": "0 0 * * *"
-    },
-    {
-      "path": "/api/cron/vl-accrual",
-      "schedule": "0 16 1 * *"
     }
   ]
 }

@@ -86,18 +86,20 @@ export function scheduleCronJobs(): void {
         include: { employee: { include: { user: true } } },
       });
 
-      for (const ot of expiring) {
-        await notificationService.createNotification(
-          ot.employee.userId,
-          'EXPIRATION_ALERT',
-          'Overtime Credit Expiring Soon',
-          `Your overtime credit of ${(ot.minutes / 60).toFixed(1)} hours expires in 7 days.`,
-          { overtimeId: ot.id, expiresAt: ot.approvedExpiry },
-        );
-        try {
-          await notificationService.sendExpirationAlertEmail(ot.employee.user.email, ot.minutes, ot.approvedExpiry!);
-        } catch { /* already logged inside sendEmail */ }
-      }
+      await Promise.allSettled(
+        expiring.map(async (ot) => {
+          await notificationService.createNotification(
+            ot.employee.userId,
+            'EXPIRATION_ALERT',
+            'Overtime Credit Expiring Soon',
+            `Your overtime credit of ${(ot.minutes / 60).toFixed(1)} hours expires in 7 days.`,
+            { overtimeId: ot.id, expiresAt: ot.approvedExpiry },
+          );
+          try {
+            await notificationService.sendExpirationAlertEmail(ot.employee.user.email, ot.minutes, ot.approvedExpiry!);
+          } catch { /* already logged inside sendEmail */ }
+        }),
+      );
     } catch (err) {
       logger.error('Expiration alert cron error:', err);
     }
