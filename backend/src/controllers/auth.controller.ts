@@ -176,7 +176,13 @@ export async function forgotPassword(req: Request, res: Response): Promise<void>
       data: { passwordResetToken: token, passwordResetExpires: expires },
     });
 
-    await notificationService.sendPasswordResetEmail(email, token);
+    try {
+      await notificationService.sendPasswordResetEmail(email, token);
+    } catch (emailErr) {
+      // Log the real SMTP error but do not expose it to the client.
+      // The reset token is already saved in the DB — the user can retry.
+      logger.error(`Password reset email delivery failed for user ${user.id} (${email}):`, emailErr);
+    }
 
     await prisma.auditLog.create({
       data: { userId: user.id, action: 'PASSWORD_RESET', ipAddress: req.ip, userAgent: req.headers['user-agent'] },

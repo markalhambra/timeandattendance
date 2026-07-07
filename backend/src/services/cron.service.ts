@@ -94,7 +94,9 @@ export function scheduleCronJobs(): void {
           `Your overtime credit of ${(ot.minutes / 60).toFixed(1)} hours expires in 7 days.`,
           { overtimeId: ot.id, expiresAt: ot.approvedExpiry },
         );
-        await notificationService.sendExpirationAlertEmail(ot.employee.user.email, ot.minutes, ot.approvedExpiry!);
+        try {
+          await notificationService.sendExpirationAlertEmail(ot.employee.user.email, ot.minutes, ot.approvedExpiry!);
+        } catch { /* already logged inside sendEmail */ }
       }
     } catch (err) {
       logger.error('Expiration alert cron error:', err);

@@ -15,6 +15,13 @@ const transporter = nodemailer.createTransport({
   },
 });
 
+// Log SMTP config at startup — visible in Vercel function cold-start logs
+if (process.env.SMTP_HOST) {
+  logger.info(`SMTP configured: ${process.env.SMTP_HOST}:${SMTP_PORT} user=${process.env.SMTP_USER} from=${process.env.EMAIL_FROM}`);
+} else {
+  logger.warn('SMTP_HOST is not set — all outbound emails will be skipped.');
+}
+
 const APP_URL = process.env.FRONTEND_URL || 'https://alpasph.vercel.app';
 
 // ─── Email Templates ─────────────────────────────────────────────────────────
@@ -103,7 +110,10 @@ const APPROVER_EMAIL_TYPES: Partial<Record<string, string>> = {
 
 export const notificationService = {
   async sendEmail(to: string, subject: string, html: string): Promise<void> {
-    if (!process.env.SMTP_HOST) return;
+    if (!process.env.SMTP_HOST) {
+      logger.warn(`sendEmail skipped (SMTP_HOST not set) — to: ${to}, subject: "${subject}"`);
+      return;
+    }
     try {
       await transporter.sendMail({
         from: process.env.EMAIL_FROM || '"ALPAS TAMS" <noreply@tams.alpas.ph>',
@@ -111,8 +121,10 @@ export const notificationService = {
         subject,
         html,
       });
+      logger.info(`Email sent — to: ${to}, subject: "${subject}"`);
     } catch (err) {
-      logger.error('Email send failed:', err);
+      logger.error(`Email send failed — to: ${to}, subject: "${subject}"`, err);
+      throw err; // propagate so callers can handle per-flow
     }
   },
 

@@ -132,7 +132,9 @@ export async function cronDailyMaintenance(req: Request, res: Response): Promise
         `Your overtime credit of ${(ot.minutes / 60).toFixed(1)} hours expires in 7 days.`,
         { overtimeId: ot.id, expiresAt: ot.approvedExpiry },
       );
-      await notificationService.sendExpirationAlertEmail(ot.employee.user.email, ot.minutes, ot.approvedExpiry!);
+      try {
+        await notificationService.sendExpirationAlertEmail(ot.employee.user.email, ot.minutes, ot.approvedExpiry!);
+      } catch { /* already logged inside sendEmail */ }
     }
     results.alerted = expiring.length;
 
@@ -168,7 +170,9 @@ export async function cronExpirationAlerts(req: Request, res: Response): Promise
         `Your overtime credit of ${(ot.minutes / 60).toFixed(1)} hours expires in 7 days.`,
         { overtimeId: ot.id, expiresAt: ot.approvedExpiry },
       );
-      await notificationService.sendExpirationAlertEmail(ot.employee.user.email, ot.minutes, ot.approvedExpiry!);
+      try {
+        await notificationService.sendExpirationAlertEmail(ot.employee.user.email, ot.minutes, ot.approvedExpiry!);
+      } catch { /* already logged inside sendEmail */ }
     }
     logger.info(`Cron expiration-alerts: alerted ${expiring.length} employees.`);
     res.json({ success: true, alerted: expiring.length });
