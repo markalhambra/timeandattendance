@@ -20,6 +20,10 @@ As an HR user, you have all Employee and Department Head features, plus tools to
 
 ## 1. HR Dashboard
 
+![HR Dashboard — workforce totals, leave summary, and pending action items](/screenshots/hr-dashboard.png)
+*HR Dashboard — workforce totals, leave summary, and pending action items*
+
+
 **Navigation:** Sidebar → **HR Dashboard**
 
 | Section | What It Shows |
@@ -37,6 +41,13 @@ As an HR user, you have all Employee and Department Head features, plus tools to
 ---
 
 ## 2. Employee Management
+
+![Employee List — search, filter by department or status, and manage records](/screenshots/hr-employee-list.png)
+*Employee List — search, filter by department or status, and manage records*
+
+![Add Employee Form — fill in personal info, department, employment type, and role](/screenshots/hr-add-employee.png)
+*Add Employee Form — fill in personal info, department, employment type, and role*
+
 
 **Navigation:** Sidebar → **HR Employees**
 
@@ -140,6 +151,10 @@ Click **Export** to download the filtered records as an Excel file.
 
 ## 4. Leave Management and Balance Adjustments
 
+![Leave Balance Adjustments — view and manually adjust balances per employee](/screenshots/hr-leave-balances.png)
+*Leave Balance Adjustments — view and manually adjust balances per employee*
+
+
 **Navigation:** Sidebar → **Leave Management**
 
 This page lets you view and manually adjust any employee's leave balance for any year.
@@ -196,6 +211,10 @@ Shows all CTO/CDO conversion requests. Approve or reject per the minimum hour ru
 ---
 
 ## 6. Reports
+
+![Reports — generate and export attendance, leave, or overtime reports by date range](/screenshots/hr-reports.png)
+*Reports — generate and export attendance, leave, or overtime reports by date range*
+
 
 **Navigation:** Sidebar → **Reports**
 

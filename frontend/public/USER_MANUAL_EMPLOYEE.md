@@ -25,6 +25,10 @@ Welcome! This guide walks you through everything available to you as an Employee
 
 ## 1. Logging In
 
+![Login screen — enter your email and password to sign in](/screenshots/login.png)
+*Login screen — enter your email and password to sign in*
+
+
 **Purpose:** Access the system using your company credentials.
 
 **Steps:**
@@ -61,6 +65,10 @@ Welcome! This guide walks you through everything available to you as an Employee
 
 ## 3. Your Dashboard
 
+![Employee Dashboard — clock widget, monthly stats, leave balances, and pending items](/screenshots/dashboard-employee.png)
+*Employee Dashboard — clock widget, monthly stats, leave balances, and pending items*
+
+
 **Purpose:** See a quick summary of your attendance and status for today.
 
 **Navigation:** After logging in you land here automatically, or click **Dashboard** in the sidebar.
@@ -78,6 +86,13 @@ Welcome! This guide walks you through everything available to you as an Employee
 ---
 
 ## 4. Clock In and Clock Out
+
+![Clock In — select your work type then press Clock In](/screenshots/clock-in.png)
+*Clock In — select your work type then press Clock In*
+
+![Clocked In — elapsed timer and Clock Out button](/screenshots/clock-in-active.png)
+*Clocked In — elapsed timer and Clock Out button*
+
 
 **Purpose:** Record your daily work hours.
 
@@ -110,6 +125,10 @@ Welcome! This guide walks you through everything available to you as an Employee
 
 ## 5. Viewing Your Attendance
 
+![Monthly Attendance — view your clock-in/out records, hours, and status](/screenshots/attendance-list.png)
+*Monthly Attendance — view your clock-in/out records, hours, and status*
+
+
 **Purpose:** Review your daily clock-in and clock-out records for any month.
 
 **Navigation:** Sidebar → **Attendance**
@@ -124,6 +143,10 @@ Welcome! This guide walks you through everything available to you as an Employee
 ---
 
 ## 6. Requesting an Attendance Correction
+
+![Correction Modal — check "overnight" to set a next-day clock-out time](/screenshots/correction-modal.png)
+*Correction Modal — check "overnight" to set a next-day clock-out time*
+
 
 **Purpose:** Fix an incorrect or missing clock-in or clock-out on a past working day.
 
@@ -155,6 +178,10 @@ Welcome! This guide walks you through everything available to you as an Employee
 ---
 
 ## 7. Filing a Leave Request
+
+![Leave Request Form — choose type, dates, reason, and optional supporting document](/screenshots/leave-form.png)
+*Leave Request Form — choose type, dates, reason, and optional supporting document*
+
 
 **Purpose:** Apply for approved time off using your leave credits.
 
@@ -200,6 +227,10 @@ Welcome! This guide walks you through everything available to you as an Employee
 
 ## 8. Viewing Your Leave Balances
 
+![Leave Balances — remaining days per leave type with accrual progress](/screenshots/leave-balances.png)
+*Leave Balances — remaining days per leave type with accrual progress*
+
+
 **Navigation:** Sidebar → **Leave**
 
 The Leave Balances section shows a grid of all leave types with:
@@ -215,6 +246,10 @@ Find the request in the leave history table below the balances and click **Cance
 ---
 
 ## 9. Overtime — Filing and Converting
+
+![Overtime Filing — enter the OT date, start and end times, and reason](/screenshots/overtime-form.png)
+*Overtime Filing — enter the OT date, start and end times, and reason*
+
 
 **Purpose:** Get credit for working more than 9 hours in a day.
 
@@ -271,6 +306,10 @@ This page shows all your submitted attendance corrections with their status (Pen
 
 ## 11. Your Profile
 
+![Profile Page — personal info, employment details, and emergency contact](/screenshots/profile.png)
+*Profile Page — personal info, employment details, and emergency contact*
+
+
 **Navigation:** Sidebar → **My Profile**
 
 Your profile shows your employee number, name, department, designation, contact info, emergency contact, and government IDs (SSS, PhilHealth, Pag-IBIG, TIN).
@@ -289,6 +328,10 @@ You can update your **mobile number**, **address**, and **emergency contact** di
 ---
 
 ## 12. Notifications
+
+![Notifications — approvals, pending items, and system announcements](/screenshots/notifications.png)
+*Notifications — approvals, pending items, and system announcements*
+
 
 Click the **bell icon** in the top-right header to view notifications. You receive notifications for:
 - Leave, overtime, or correction requests approved or rejected

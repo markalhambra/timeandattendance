@@ -20,6 +20,10 @@ As an Administrator, you have full access to the entire system — including all
 
 ## 1. Admin Dashboard
 
+![Admin Dashboard — system-wide headcount, department breakdown, and recent audit activity](/screenshots/admin-dashboard.png)
+*Admin Dashboard — system-wide headcount, department breakdown, and recent audit activity*
+
+
 **Navigation:** Sidebar → **Admin Dashboard**
 
 | Section | What It Shows |
@@ -57,6 +61,13 @@ See the **HR Manual, Section 2** for full step-by-step instructions.
 ---
 
 ## 3. Department Management
+
+![Department List — view all departments, their heads, and headcount](/screenshots/admin-departments.png)
+*Department List — view all departments, their heads, and headcount*
+
+![Create/Edit Department — name, optional description, and assign a department head](/screenshots/admin-dept-form.png)
+*Create/Edit Department — name, optional description, and assign a department head*
+
 
 **Navigation:** Sidebar → **Departments**
 
@@ -107,6 +118,10 @@ After creating, assign a head and add members.
 
 ## 4. Audit Logs
 
+![Audit Logs — timestamped record of every action taken in the system](/screenshots/admin-audit-logs.png)
+*Audit Logs — timestamped record of every action taken in the system*
+
+
 **Navigation:** Sidebar → **Audit Logs**
 
 Audit Logs record every significant action in the system — who did what, when, and from which IP address. These logs cannot be deleted.
@@ -136,6 +151,10 @@ Click the expand button on any row to see:
 ---
 
 ## 5. Approvals and Reports
+
+![System-Wide Approvals — filter by department; approve or reject leaves, OT, and corrections](/screenshots/admin-approvals.png)
+*System-Wide Approvals — filter by department; approve or reject leaves, OT, and corrections*
+
 
 As Administrator, you have full approval authority across all departments — including approving requests from HR users. You are the final step in OT Conversion multi-step approvals (after Department Head and HR).
 

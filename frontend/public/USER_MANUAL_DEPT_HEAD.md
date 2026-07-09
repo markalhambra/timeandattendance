@@ -33,6 +33,10 @@ You are the **first approver** for your team's requests. HR may perform a final 
 
 ## 2. Team Dashboard
 
+![Team Dashboard — headcount stats and today's attendance at a glance](/screenshots/depthead-dashboard.png)
+*Team Dashboard — headcount stats and today's attendance at a glance*
+
+
 **Navigation:** Sidebar → **Team Overview**
 
 **What you will see:**
@@ -53,6 +57,16 @@ You are the **first approver** for your team's requests. HR may perform a final 
 ---
 
 ## 3. Approving or Rejecting Requests
+
+![Approvals – Leaves Tab — view pending leave requests and Approve or Reject](/screenshots/depthead-approvals-leave.png)
+*Approvals – Leaves Tab — view pending leave requests and Approve or Reject*
+
+![Approvals – Overtime Tab — review and action overtime requests](/screenshots/depthead-approvals-ot.png)
+*Approvals – Overtime Tab — review and action overtime requests*
+
+![Approvals – Corrections Tab — compare original vs. requested times](/screenshots/depthead-approvals-corrections.png)
+*Approvals – Corrections Tab — compare original vs. requested times*
+
 
 **Navigation:** Sidebar → **Approvals**
 
