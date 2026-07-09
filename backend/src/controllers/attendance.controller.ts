@@ -136,9 +136,24 @@ export async function clockOut(req: AuthRequest, res: Response): Promise<void> {
   try {
     const today = phtToday();
 
-    const record = await prisma.attendanceRecord.findUnique({
+    let record = await prisma.attendanceRecord.findUnique({
       where: { employeeId_date: { employeeId, date: today } },
     });
+
+    // Overnight shift fallback: if today has no open clock-in and it's before 6:00 AM PHT,
+    // check if yesterday's record has an open clock-in (i.e. employee worked past midnight).
+    if (!record?.clockIn || record.clockOut) {
+      const phtHour = new Date(Date.now() + 8 * 60 * 60 * 1000).getUTCHours();
+      if (phtHour < 6) {
+        const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
+        const overnightRecord = await prisma.attendanceRecord.findUnique({
+          where: { employeeId_date: { employeeId, date: yesterday } },
+        });
+        if (overnightRecord?.clockIn && !overnightRecord.clockOut) {
+          record = overnightRecord;
+        }
+      }
+    }
 
     if (!record?.clockIn) { res.status(400).json({ success: false, message: 'No clock-in found for today.' }); return; }
     if (record.clockOut) { res.status(400).json({ success: false, message: 'Already clocked out today.' }); return; }
@@ -168,7 +183,7 @@ export async function clockOut(req: AuthRequest, res: Response): Promise<void> {
         data: {
           employeeId,
           attendanceId: record.id,
-          date: today,
+          date: record.date,
           startTime: record.clockIn,
           endTime: now,
           minutes: overtimeMinutes,

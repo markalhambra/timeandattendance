@@ -154,7 +154,7 @@ export default function AttendancePage() {
                   type="datetime-local"
                   value={correctionForm.requestedClockOut}
                   min={`${format(parseISO(selectedRecord.date), "yyyy-MM-dd")}T00:00`}
-                  max={`${format(parseISO(selectedRecord.date), "yyyy-MM-dd")}T23:59`}
+                  max={`${format(new Date(parseISO(selectedRecord.date).getTime() + 86400000), "yyyy-MM-dd")}T06:00`}
                   onChange={(e) => setCorrectionForm((f) => ({ ...f, requestedClockOut: e.target.value }))}
                   className="input"
                 />
