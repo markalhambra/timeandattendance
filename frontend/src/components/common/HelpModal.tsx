@@ -5,15 +5,23 @@ import remarkGfm from 'remark-gfm';
 interface HelpModalProps {
   open: boolean;
   onClose: () => void;
+  role?: string;
 }
 
-export default function HelpModal({ open, onClose }: HelpModalProps) {
+const MANUAL_BY_ROLE: Record<string, string> = {
+  ADMIN: '/USER_MANUAL_ADMIN.md',
+  HR: '/USER_MANUAL_HR.md',
+  DEPARTMENT_HEAD: '/USER_MANUAL_DEPT_HEAD.md',
+};
+
+export default function HelpModal({ open, onClose, role }: HelpModalProps) {
   const [content, setContent] = useState<string>('');
 
   useEffect(() => {
     if (!open) return;
     let mounted = true;
-    fetch('/USER_MANUAL.md')
+    const file = (role && MANUAL_BY_ROLE[role]) ? MANUAL_BY_ROLE[role] : '/USER_MANUAL_EMPLOYEE.md';
+    fetch(file)
       .then((r) => r.text())
       .then((t) => {
         if (mounted) setContent(t);

@@ -129,7 +129,7 @@ export default function Header({ onMenuClick }: Props) {
 
       {/* Click outside to close */}
       {showNotifs && <div className="fixed inset-0 z-40" onClick={() => setShowNotifs(false)} />}
-      {showHelp && <HelpModal open={showHelp} onClose={() => setShowHelp(false)} />}
+      {showHelp && <HelpModal open={showHelp} onClose={() => setShowHelp(false)} role={user?.role} />}
     </header>
   );
 }
