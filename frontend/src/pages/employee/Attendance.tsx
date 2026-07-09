@@ -11,6 +11,7 @@ export default function AttendancePage() {
   const [showCorrectionModal, setShowCorrectionModal] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState<AttendanceRecord | null>(null);
   const [correctionForm, setCorrectionForm] = useState({ requestedClockIn: '', requestedClockOut: '', reason: '' });
+  const [clockOutNextDay, setClockOutNextDay] = useState(false);
 
   const [year, m] = month.split('-').map(Number);
   const startDate = format(startOfMonth(new Date(year, m - 1)), 'yyyy-MM-dd');
@@ -44,9 +45,11 @@ export default function AttendancePage() {
 
   const openCorrection = (r: AttendanceRecord) => {
     setSelectedRecord(r);
-    // Always anchor times to the attendance record's date so the user can't
-    // accidentally pick tomorrow's date (which would inflate overtime by 24h).
     const dateStr = format(parseISO(r.date), "yyyy-MM-dd");
+    // Detect if the existing clock-out is on the next calendar day (overnight shift)
+    const existingClockOutDate = r.clockOut ? format(parseISO(r.clockOut), 'yyyy-MM-dd') : null;
+    const isNextDay = existingClockOutDate ? existingClockOutDate > dateStr : false;
+    setClockOutNextDay(isNextDay);
     setCorrectionForm({
       requestedClockIn: r.clockIn
         ? format(parseISO(r.clockIn), "yyyy-MM-dd'T'HH:mm")
@@ -57,6 +60,18 @@ export default function AttendancePage() {
       reason: '',
     });
     setShowCorrectionModal(true);
+  };
+
+  const toggleClockOutNextDay = (checked: boolean) => {
+    if (!selectedRecord) return;
+    setClockOutNextDay(checked);
+    // Flip only the date portion; preserve the time the user already entered.
+    setCorrectionForm((f) => {
+      const timePart = f.requestedClockOut.includes('T') ? f.requestedClockOut.split('T')[1] : '00:00';
+      const dStr = format(parseISO(selectedRecord.date), "yyyy-MM-dd");
+      const nextDStr = format(new Date(parseISO(selectedRecord.date).getTime() + 86400000), "yyyy-MM-dd");
+      return { ...f, requestedClockOut: `${checked ? nextDStr : dStr}T${timePart}` };
+    });
   };
 
   return (
@@ -150,11 +165,24 @@ export default function AttendancePage() {
               </div>
               <div>
                 <label className="label">Corrected Clock Out</label>
+                <label className="flex items-center gap-2 mb-1.5 cursor-pointer select-none w-fit">
+                  <input
+                    type="checkbox"
+                    checked={clockOutNextDay}
+                    onChange={(e) => toggleClockOutNextDay(e.target.checked)}
+                    className="accent-black w-3.5 h-3.5"
+                  />
+                  <span className="text-xs text-gray-500">Clock-out is on the next day (overnight)</span>
+                </label>
                 <input
                   type="datetime-local"
                   value={correctionForm.requestedClockOut}
-                  min={`${format(parseISO(selectedRecord.date), "yyyy-MM-dd")}T00:00`}
-                  max={`${format(new Date(parseISO(selectedRecord.date).getTime() + 86400000), "yyyy-MM-dd")}T06:00`}
+                  min={clockOutNextDay
+                    ? `${format(new Date(parseISO(selectedRecord.date).getTime() + 86400000), "yyyy-MM-dd")}T00:00`
+                    : `${format(parseISO(selectedRecord.date), "yyyy-MM-dd")}T00:00`}
+                  max={clockOutNextDay
+                    ? `${format(new Date(parseISO(selectedRecord.date).getTime() + 86400000), "yyyy-MM-dd")}T06:00`
+                    : `${format(parseISO(selectedRecord.date), "yyyy-MM-dd")}T23:59`}
                   onChange={(e) => setCorrectionForm((f) => ({ ...f, requestedClockOut: e.target.value }))}
                   className="input"
                 />
