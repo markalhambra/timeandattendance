@@ -22,7 +22,7 @@ if (process.env.SMTP_HOST) {
   logger.warn('SMTP_HOST is not set — all outbound emails will be skipped.');
 }
 
-const APP_URL = process.env.FRONTEND_URL || 'https://alpasph.vercel.app';
+const APP_URL = process.env.FRONTEND_URL || 'https://tams.alpas.ph';
 
 // ─── Email Templates ─────────────────────────────────────────────────────────
 
