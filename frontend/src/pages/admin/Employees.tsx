@@ -326,7 +326,7 @@ export default function AdminEmployees() {
               </div>
               <div>
                 <label className="label">Email {modal === 'add' ? '*' : ''}</label>
-                <input type="email" className="input" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="juan@company.com" disabled={modal === 'edit'} />
+                <input type="email" className="input" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="juan@company.com" />
               </div>
               <div>
                 <label className="label">Mobile</label>

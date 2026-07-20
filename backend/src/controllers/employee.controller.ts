@@ -189,7 +189,7 @@ export async function getEmployee(req: AuthRequest, res: Response): Promise<void
 }
 
 export async function updateEmployee(req: AuthRequest, res: Response): Promise<void> {
-  const { firstName, lastName, middleName, mobile, address, designation, departmentId, dateHired, role,
+  const { email, firstName, lastName, middleName, mobile, address, designation, departmentId, dateHired, role,
           sssNumber, pagibigNumber, philhealthNumber, tinNumber,
           nickname, gender, birthday, emergencyContact, emergencyContactNumber, employmentType } = req.body;
   try {
@@ -199,9 +199,19 @@ export async function updateEmployee(req: AuthRequest, res: Response): Promise<v
     });
     if (!existing) { res.status(404).json({ success: false, message: 'Employee not found.' }); return; }
 
+    // If email is changing, ensure it isn't already taken by another account
+    const newEmail = email && email.toLowerCase().trim() !== existing.user.email.toLowerCase()
+      ? email.toLowerCase().trim()
+      : undefined;
+    if (newEmail) {
+      const taken = await prisma.user.findFirst({ where: { email: newEmail, id: { not: existing.userId } } });
+      if (taken) { res.status(400).json({ success: false, message: 'Email is already in use by another account.' }); return; }
+    }
+
     const employee = await prisma.employee.update({
       where: { id: req.params.id },
       data: { firstName, lastName, middleName, mobile, address, designation, departmentId,
+               email: newEmail ?? undefined,
                dateHired: dateHired ? new Date(dateHired) : undefined,
                sssNumber, pagibigNumber, philhealthNumber, tinNumber,
                nickname, gender,
@@ -211,10 +221,13 @@ export async function updateEmployee(req: AuthRequest, res: Response): Promise<v
       include: { department: true },
     });
 
-    // Sync role if provided
+    // Sync role and/or email on the user record
     const effectiveRole = role || existing.user.role;
-    if (role && role !== existing.user.role) {
-      await prisma.user.update({ where: { id: existing.userId }, data: { role } });
+    const userUpdates: Record<string, unknown> = {};
+    if (role && role !== existing.user.role) userUpdates.role = role;
+    if (newEmail) userUpdates.email = newEmail;
+    if (Object.keys(userUpdates).length) {
+      await prisma.user.update({ where: { id: existing.userId }, data: userUpdates });
     }
 
     // If this employee is a department head, keep Department.headId in sync
