@@ -434,7 +434,7 @@ export default function AdminEmployees() {
             <p className="text-sm text-gray-500 mb-4">{selected.firstName} {selected.lastName}</p>
             <div>
               <label className="label">New Password</label>
-              <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className="input" placeholder="Minimum 8 characters" />
+              <input type="text" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className="input" placeholder="Minimum 8 characters" />
             </div>
             <div className="flex gap-2 mt-4">
               <button onClick={closeModal} className="btn-secondary flex-1">Cancel</button>

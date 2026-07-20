@@ -52,7 +52,7 @@ function emailBase(title: string, bodyContent: string): string {
 </html>`;
 }
 
-function requestEmail(requesterName: string, typeName: string, date: string): string {
+function requestEmail(requesterName: string, typeName: string, date: string, actionUrl: string): string {
   return emailBase(
     `New ${typeName}`,
     `<p style="color:#555;font-size:15px;line-height:1.7;margin:0 0 16px;">
@@ -61,7 +61,7 @@ function requestEmail(requesterName: string, typeName: string, date: string): st
     <table cellpadding="0" cellspacing="0" style="margin:0 0 28px;">
       <tr><td style="color:#888;font-size:13px;padding-right:12px;">Submitted:</td><td style="color:#333;font-size:13px;font-weight:bold;">${date}</td></tr>
     </table>
-    <a href="${APP_URL}" style="display:inline-block;background:#000;color:#fff;padding:13px 28px;border-radius:8px;text-decoration:none;font-size:14px;font-weight:bold;">Review Request →</a>`,
+    <a href="${actionUrl}" style="display:inline-block;background:#000;color:#fff;padding:13px 28px;border-radius:8px;text-decoration:none;font-size:14px;font-weight:bold;">Review Request →</a>`,
   );
 }
 
@@ -138,6 +138,26 @@ export const notificationService = {
     );
   },
 
+  async sendNewCredentialsEmail(email: string, employeeName: string, newPassword: string): Promise<void> {
+    await this.sendEmail(
+      email,
+      'Your Password Has Been Reset — ALPAS TAMS',
+      emailBase(
+        'Password Reset by Administrator',
+        `<p style="color:#555;font-size:15px;line-height:1.7;margin:0 0 16px;">Hello <strong>${employeeName}</strong>,</p>
+        <p style="color:#555;font-size:15px;line-height:1.7;margin:0 0 24px;">An administrator has reset your ALPAS TAMS password. Use the credentials below to log in, then change your password from your Profile page.</p>
+        <div style="background:#f4f4f5;border-radius:10px;padding:20px;margin:0 0 24px;">
+          <table cellpadding="0" cellspacing="0">
+            <tr><td style="color:#888;font-size:13px;padding:4px 20px 4px 0;">Email:</td><td style="color:#111;font-size:13px;font-weight:bold;font-family:monospace;">${email}</td></tr>
+            <tr><td style="color:#888;font-size:13px;padding:4px 20px 4px 0;">New Password:</td><td style="color:#111;font-size:13px;font-weight:bold;font-family:monospace;">${newPassword}</td></tr>
+          </table>
+        </div>
+        <a href="${APP_URL}" style="display:inline-block;background:#000;color:#fff;padding:13px 28px;border-radius:8px;text-decoration:none;font-size:14px;font-weight:bold;">Log In Now →</a>
+        <p style="margin:20px 0 0;color:#999;font-size:12px;">If you did not expect this, please contact your HR administrator immediately.</p>`,
+      ),
+    );
+  },
+
   async sendPasswordResetEmail(email: string, token: string): Promise<void> {
     const resetUrl = `${APP_URL}/reset-password?token=${token}`;
     await this.sendEmail(
@@ -210,7 +230,7 @@ export const notificationService = {
               await this.sendEmail(
                 hr.email,
                 `${titles[type]} — ${fullName} — ALPAS TAMS`,
-                requestEmail(fullName, typeName, date),
+                requestEmail(fullName, typeName, date, `${APP_URL}/hr`),
               );
             }
           }
@@ -231,7 +251,7 @@ export const notificationService = {
           await this.sendEmail(
             employee.department.head.email,
             `${titles[type]} — ${fullName} — ALPAS TAMS`,
-            requestEmail(fullName, typeName, date),
+            requestEmail(fullName, typeName, date, `${APP_URL}/dept-head/approvals`),
           );
         }
       }

@@ -1,6 +1,8 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth.middleware';
 import { prisma } from '../config/database';
+import { logger } from '../config/logger';
+import { notificationService } from '../services/notification.service';
 import { getSupabaseClient, STORAGE_BUCKET } from '../config/supabase';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
@@ -303,12 +305,26 @@ export async function adminResetPassword(req: AuthRequest, res: Response): Promi
     if (!newPassword || newPassword.length < 8) {
       res.status(400).json({ success: false, message: 'Password must be at least 8 characters.' }); return;
     }
-    const employee = await prisma.employee.findUnique({ where: { id: req.params.id } });
+    const employee = await prisma.employee.findUnique({
+      where: { id: req.params.id },
+      include: { user: true },
+    });
     if (!employee) { res.status(404).json({ success: false, message: 'Employee not found.' }); return; }
     const hashed = await bcrypt.hash(newPassword, 12);
     await prisma.user.update({ where: { id: employee.userId }, data: { password: hashed, refreshToken: null } });
-    res.json({ success: true, message: 'Password reset successfully.' });
-  } catch {
+    // Email the employee their new credentials (non-blocking)
+    try {
+      await notificationService.sendNewCredentialsEmail(
+        employee.user.email,
+        `${employee.firstName} ${employee.lastName}`,
+        newPassword,
+      );
+    } catch (emailErr) {
+      logger.warn('Could not send credentials email after password reset:', emailErr);
+    }
+    res.json({ success: true, data: { tempPassword: newPassword }, message: 'Password reset successfully.' });
+  } catch (err) {
+    logger.error('adminResetPassword error:', err);
     res.status(500).json({ success: false, message: 'Failed to reset password.' });
   }
 }
