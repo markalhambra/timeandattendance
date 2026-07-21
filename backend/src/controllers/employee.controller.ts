@@ -14,7 +14,7 @@ export async function getMyProfile(req: AuthRequest, res: Response): Promise<voi
   try {
     const employee = await prisma.employee.findUnique({
       where: { userId: req.user!.sub },
-      include: { department: true, user: { select: { email: true, role: true, lastLogin: true } } },
+      include: { department: true, user: { select: { email: true, role: true, lastLogin: true, isActive: true, lockedAt: true, failedLoginAttempts: true } } },
     });
     if (!employee) { res.status(404).json({ success: false, message: 'Profile not found.' }); return; }
     res.json({ success: true, data: employee });
@@ -69,7 +69,7 @@ export async function getEmployees(req: AuthRequest, res: Response): Promise<voi
     const [employees, total] = await Promise.all([
       prisma.employee.findMany({
         where,
-        include: { department: true, user: { select: { id: true, email: true, role: true, isActive: true, lastLogin: true } } },
+        include: { department: true, user: { select: { id: true, email: true, role: true, isActive: true, lastLogin: true, lockedAt: true, failedLoginAttempts: true } } },
         orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
         skip,
         take: parseInt(limit),
@@ -177,7 +177,7 @@ export async function getEmployee(req: AuthRequest, res: Response): Promise<void
       where: { id: req.params.id },
       include: {
         department: true,
-        user: { select: { role: true, lastLogin: true, isActive: true } },
+        user: { select: { role: true, lastLogin: true, isActive: true, lockedAt: true, failedLoginAttempts: true } },
         documents: true,
       },
     });
