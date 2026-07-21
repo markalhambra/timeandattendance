@@ -51,7 +51,7 @@ function HomeRedirect() {
     EMPLOYEE: '/dashboard',
     DEPARTMENT_HEAD: '/dept-head/dashboard',
     HR: '/hr/dashboard',
-    ADMIN: '/admin/dashboard',
+    ADMIN: '/hr/dashboard',
   };
   return <Navigate to={roleRoutes[user?.role || 'EMPLOYEE'] || '/dashboard'} replace />;
 }
@@ -86,14 +86,14 @@ export default function App() {
           <Route path="/hr/attendance" element={<RequireAuth roles={['HR', 'ADMIN']}><Layout><HRAttendancePage /></Layout></RequireAuth>} />
           <Route path="/hr/reports" element={<RequireAuth roles={['HR', 'ADMIN']}><Layout><HRReportsPage /></Layout></RequireAuth>} />
           <Route path="/hr/employees" element={<RequireAuth roles={['HR', 'ADMIN']}><Layout><HREmployeesPage /></Layout></RequireAuth>} />
-          <Route path="/hr/employees/:id" element={<RequireAuth roles={['HR']}><Layout><HREmployeeProfile /></Layout></RequireAuth>} />
+          <Route path="/hr/employees/:id" element={<RequireAuth roles={['HR', 'ADMIN']}><Layout><HREmployeeProfile /></Layout></RequireAuth>} />
           <Route path="/hr/leave-management" element={<RequireAuth roles={['HR', 'ADMIN']}><Layout><HRLeaveManagement /></Layout></RequireAuth>} />
 
-          {/* Admin */}
-          <Route path="/admin/dashboard" element={<RequireAuth roles={['ADMIN']}><Layout><AdminDashboard /></Layout></RequireAuth>} />
-          <Route path="/admin/employees" element={<RequireAuth roles={['ADMIN']}><Layout><AdminEmployeesPage /></Layout></RequireAuth>} />
-          <Route path="/admin/departments" element={<RequireAuth roles={['ADMIN']}><Layout><AdminDepartmentsPage /></Layout></RequireAuth>} />
-          <Route path="/admin/audit" element={<RequireAuth roles={['ADMIN']}><Layout><AuditLogsPage /></Layout></RequireAuth>} />
+          {/* Admin — /admin/dashboard and /admin/employees redirect to HR equivalents */}
+          <Route path="/admin/dashboard" element={<RequireAuth><Navigate to="/hr/dashboard" replace /></RequireAuth>} />
+          <Route path="/admin/employees" element={<RequireAuth><Navigate to="/hr/employees" replace /></RequireAuth>} />
+          <Route path="/admin/departments" element={<RequireAuth roles={['HR', 'ADMIN']}><Layout><AdminDepartmentsPage /></Layout></RequireAuth>} />
+          <Route path="/admin/audit" element={<RequireAuth roles={['HR', 'ADMIN']}><Layout><AuditLogsPage /></Layout></RequireAuth>} />
 
           <Route path="*" element={<NotFoundPage />} />
         </Routes>

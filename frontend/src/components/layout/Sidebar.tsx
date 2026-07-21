@@ -26,11 +26,8 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'HR Employees', path: '/hr/employees', icon: '◎', roles: ['HR', 'ADMIN'] },
   { label: 'Reports', path: '/hr/reports', icon: '▤', roles: ['HR', 'ADMIN'] },
   { label: 'Leave Management', path: '/hr/leave-management', icon: '◈', roles: ['HR', 'ADMIN'] },
-  // Admin
-  { label: 'Admin Dashboard', path: '/admin/dashboard', icon: '⬛', roles: ['ADMIN'] },
-  { label: 'Employees', path: '/admin/employees', icon: '◐', roles: ['ADMIN'] },
-  { label: 'Departments', path: '/admin/departments', icon: '▣', roles: ['ADMIN'] },
-  { label: 'Audit Logs', path: '/admin/audit', icon: '▧', roles: ['ADMIN'] },
+  { label: 'Departments', path: '/admin/departments', icon: '▣', roles: ['HR', 'ADMIN'] },
+  { label: 'Audit Logs', path: '/admin/audit', icon: '▧', roles: ['HR', 'ADMIN'] },
 ];
 
 interface Props { onClose: () => void; }

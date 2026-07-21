@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Overnight Clock-Out Mockup</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { background: #f3f4f6; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+  .badge-onsite { background:#111;color:#fff;padding:2px 10px;border-radius:9999px;font-size:12px;font-weight:600; }
+  .label { font-size:12px;font-weight:600;color:#374151;display:block;margin-bottom:4px; }
+  .input { width:100%;border:1px solid #e5e7eb;border-radius:8px;padding:8px 10px;font-size:13px;outline:none; }
+  .input:focus { border-color:#111;box-shadow:0 0 0 2px rgba(0,0,0,.08); }
+  .btn-primary { background:#111;color:#fff;border:none;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer; }
+  .btn-secondary { background:#f3f4f6;color:#111;border:1px solid #e5e7eb;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer; }
+</style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-start p-8 gap-10">
+
+  <h1 class="text-xl font-bold text-gray-700">Overnight Shift — Correction Flow</h1>
+
+  <!-- ── Row 1: The attendance table row ── -->
+  <div class="w-full max-w-2xl bg-white rounded-2xl shadow p-0 overflow-hidden">
+    <div class="px-5 py-4 border-b border-gray-100">
+      <p class="font-semibold text-sm">Attendance Records — June 2026</p>
+    </div>
+    <table class="w-full text-sm">
+      <thead class="bg-gray-50 border-b border-gray-100">
+        <tr>
+          <th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Date</th>
+          <th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Clock In</th>
+          <th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Clock Out</th>
+          <th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Status</th>
+          <th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Hours</th>
+          <th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Overtime</th>
+          <th class="px-4 py-3"></th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- Correct row: after fix applied -->
+        <tr class="hover:bg-gray-50">
+          <td class="px-4 py-3 font-medium">Mon, Jun 29</td>
+          <td class="px-4 py-3">08:24 AM</td>
+          <td class="px-4 py-3">03:00 AM <span class="text-xs text-gray-400">(Jun 30)</span></td>
+          <td class="px-4 py-3"><span class="badge-onsite">ON_SITE</span></td>
+          <td class="px-4 py-3 font-semibold text-green-600">18.6h</td>
+          <td class="px-4 py-3 font-semibold">9.6h</td>
+          <td class="px-4 py-3"><button onclick="openModal()" class="text-xs text-gray-500 hover:text-black underline">Correct</button></td>
+        </tr>
+      </tbody>
+    </table>
+    <p class="text-xs text-gray-400 px-5 py-3">↑ After correction is approved — hours show correctly as 18.6h with 9.6h OT</p>
+  </div>
+
+  <!-- ── Row 2: The modal ── -->
+  <div id="modal-backdrop" onclick="if(event.target===this)closeModal()"
+       class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 hidden">
+    <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 space-y-4">
+
+      <div>
+        <h3 class="font-bold text-base">Request Attendance Correction</h3>
+        <p class="text-xs text-gray-500 mt-0.5">Monday, June 29, 2026</p>
+      </div>
+
+      <div class="space-y-4">
+        <!-- Clock In -->
+        <div>
+          <label class="label">Corrected Clock In</label>
+          <input type="datetime-local" class="input" value="2026-06-29T08:24"
+                 min="2026-06-29T00:00" max="2026-06-29T23:59" />
+        </div>
+
+        <!-- Clock Out with overnight checkbox -->
+        <div>
+          <label class="label">Corrected Clock Out</label>
+
+          <!-- Checkbox toggle — the new addition -->
+          <label class="flex items-center gap-2 mb-1.5 cursor-pointer select-none w-fit">
+            <input id="overnightCheck" type="checkbox"
+                   class="accent-black w-3.5 h-3.5"
+                   onchange="toggleOvernight(this.checked)" />
+            <span class="text-xs text-gray-500">Clock-out is on the next day (overnight)</span>
+          </label>
+
+          <input id="clockOutInput" type="datetime-local" class="input"
+                 value="2026-06-29T17:00"
+                 min="2026-06-29T00:00" max="2026-06-29T23:59" />
+          <p id="dateHint" class="text-xs text-gray-400 mt-1 hidden">
+            📅 Picker is now locked to <strong>June 30</strong> (next day, up to 06:00 AM)
+          </p>
+        </div>
+
+        <!-- Reason -->
+        <div>
+          <label class="label">Reason <span class="font-normal text-gray-400">*</span></label>
+          <textarea class="input resize-none" rows="3"
+                    placeholder="Explain why the correction is needed..."></textarea>
+        </div>
+      </div>
+
+      <div class="flex gap-2">
+        <button onclick="closeModal()" class="btn-secondary flex-1">Cancel</button>
+        <button class="btn-primary flex-1">Submit Request</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Step guide ── -->
+  <div class="w-full max-w-2xl bg-white rounded-2xl shadow p-6 space-y-3">
+    <p class="font-semibold text-sm text-gray-700">How to correct an overnight clock-out</p>
+    <ol class="list-decimal list-inside space-y-2 text-sm text-gray-600">
+      <li>Click <strong>Correct</strong> on the June 29 row → modal opens</li>
+      <li>Clock In is pre-filled as <code class="bg-gray-100 px-1 rounded">08:24 AM</code></li>
+      <li>✅ Tick <strong>"Clock-out is on the next day (overnight)"</strong></li>
+      <li>The clock-out picker jumps to <code class="bg-gray-100 px-1 rounded">June 30</code> — set time to <code class="bg-gray-100 px-1 rounded">03:00 AM</code></li>
+      <li>Enter a reason and submit → HR/Dept Head approves</li>
+      <li>Hours update to <strong class="text-green-600">18.6h</strong> with <strong>9.6h overtime</strong></li>
+    </ol>
+    <button onclick="openModal()" class="btn-primary text-sm mt-2">▶ Open Live Mockup</button>
+  </div>
+
+<script>
+  function openModal() {
+    document.getElementById('modal-backdrop').classList.remove('hidden');
+  }
+  function closeModal() {
+    document.getElementById('modal-backdrop').classList.add('hidden');
+  }
+  function toggleOvernight(checked) {
+    const input = document.getElementById('clockOutInput');
+    const hint = document.getElementById('dateHint');
+    const timePart = input.value.split('T')[1] || '00:00';
+    if (checked) {
+      input.value = '2026-06-30T' + timePart;
+      input.min = '2026-06-30T00:00';
+      input.max = '2026-06-30T06:00';
+      hint.classList.remove('hidden');
+    } else {
+      input.value = '2026-06-29T' + timePart;
+      input.min = '2026-06-29T00:00';
+      input.max = '2026-06-29T23:59';
+      hint.classList.add('hidden');
+    }
+  }
+</script>
+</body>
+</html>
