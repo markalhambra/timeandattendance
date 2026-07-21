@@ -342,6 +342,27 @@ export async function adminResetPassword(req: AuthRequest, res: Response): Promi
   }
 }
 
+export async function unlockUser(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const employee = await prisma.employee.findUnique({
+      where: { id: req.params.id },
+      include: { user: true },
+    });
+    if (!employee) { res.status(404).json({ success: false, message: 'Employee not found.' }); return; }
+    await prisma.user.update({
+      where: { id: employee.userId },
+      data: { failedLoginAttempts: 0, lockedAt: null, isActive: true },
+    });
+    prisma.auditLog.create({
+      data: { userId: req.user!.sub, action: 'UPDATE', entity: 'User', entityId: employee.userId, ipAddress: req.ip, userAgent: req.headers['user-agent'] },
+    }).catch(() => {});
+    res.json({ success: true, message: 'Account unlocked successfully.' });
+  } catch (err) {
+    logger.error('unlockUser error:', err);
+    res.status(500).json({ success: false, message: 'Failed to unlock account.' });
+  }
+}
+
 export async function uploadProfilePicture(req: AuthRequest, res: Response): Promise<void> {
   if (!req.file) { res.status(400).json({ success: false, message: 'No file uploaded.' }); return; }
   try {

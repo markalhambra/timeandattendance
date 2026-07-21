@@ -68,6 +68,15 @@ export default function EmployeeProfile() {
     onError: () => toast.error('Failed to delete document.'),
   });
 
+  const unlockMutation = useMutation({
+    mutationFn: () => api.patch(`/employees/${id}/unlock`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['employee-profile', id] });
+      toast.success('Account unlocked.');
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.message || 'Failed to unlock.'),
+  });
+
   const startEdit = () => {
     if (!employee) return;
     setForm({
@@ -207,6 +216,18 @@ export default function EmployeeProfile() {
             <span className={`badge ${employee.isActive ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'}`}>
               {employee.isActive ? 'Active' : 'Inactive'}
             </span>
+            {employee.user?.lockedAt && (
+              <>
+                <span className="badge bg-orange-50 text-orange-700">🔒 Locked</span>
+                <button
+                  onClick={() => { if (confirm('Unlock this account?')) unlockMutation.mutate(); }}
+                  disabled={unlockMutation.isPending}
+                  className="text-xs px-3 py-1 rounded-lg border border-orange-300 text-orange-700 hover:bg-orange-50 transition-colors font-medium disabled:opacity-50"
+                >
+                  {unlockMutation.isPending ? 'Unlocking…' : 'Unlock Account'}
+                </button>
+              </>
+            )}
           </div>
         </div>
       </div>

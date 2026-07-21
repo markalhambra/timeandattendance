@@ -20,12 +20,38 @@ export async function login(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    const valid = await bcrypt.compare(password, user.password);
-    if (!valid) {
-      res.status(401).json({ success: false, message: 'Invalid credentials.' });
+    // Check if account is locked
+    if (user.lockedAt) {
+      res.status(403).json({ success: false, message: 'Account locked due to too many failed login attempts. Please contact HR to unlock your account.' });
       return;
     }
 
+    const valid = await bcrypt.compare(password, user.password);
+    if (!valid) {
+      const attempts = (user.failedLoginAttempts ?? 0) + 1;
+      const shouldLock = attempts >= 5;
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          failedLoginAttempts: attempts,
+          ...(shouldLock ? { lockedAt: new Date(), isActive: false } : {}),
+        },
+      });
+      if (shouldLock) {
+        // Notify HR+Admin that an account has been locked
+        notificationService.notifyHR(
+          'SYSTEM',
+          'Account Locked',
+          `${user.email} has been locked after 5 failed login attempts.`,
+        ).catch(() => {});
+        res.status(403).json({ success: false, message: 'Account locked due to too many failed login attempts. Please contact HR to unlock your account.' });
+      } else {
+        res.status(401).json({ success: false, message: `Invalid credentials. ${5 - attempts} attempt${5 - attempts === 1 ? '' : 's'} remaining before lockout.` });
+      }
+      return;
+    }
+
+    // Successful login — reset failed attempts
     const payload = {
       sub: user.id,
       role: user.role,
@@ -43,6 +69,8 @@ export async function login(req: Request, res: Response): Promise<void> {
         refreshToken: await bcrypt.hash(refreshToken, 10),
         lastLogin: new Date(),
         lastLoginIp: req.ip,
+        failedLoginAttempts: 0,
+        lockedAt: null,
       },
     });
 

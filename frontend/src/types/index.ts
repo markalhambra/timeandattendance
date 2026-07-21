@@ -81,6 +81,8 @@ export interface Employee {
     role: Role;
     lastLogin?: string;
     isActive: boolean;
+    lockedAt?: string | null;
+    failedLoginAttempts?: number;
   };
   documents?: Document[];
 }

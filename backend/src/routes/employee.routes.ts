@@ -56,6 +56,7 @@ employeeRoutes.patch('/:id/toggle-active', authorize('ADMIN', 'HR'), auditLog('U
 employeeRoutes.patch('/:id/archive', authorize('ADMIN', 'HR'), auditLog('UPDATE', 'Employee'), employeeController.archiveEmployee);
 employeeRoutes.patch('/:id/restore', authorize('ADMIN', 'HR'), auditLog('UPDATE', 'Employee'), employeeController.restoreEmployee);
 employeeRoutes.patch('/:id/reset-password', authorize('ADMIN', 'HR'), auditLog('PASSWORD_RESET', 'Employee'), employeeController.adminResetPassword);
+employeeRoutes.patch('/:id/unlock', authorize('ADMIN', 'HR'), auditLog('UPDATE', 'Employee'), employeeController.unlockUser);
 
 // Profile picture
 employeeRoutes.post('/:id/profile-picture', authorize('HR', 'ADMIN'), profileUpload.single('picture'), employeeController.uploadProfilePicture);

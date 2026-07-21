@@ -105,6 +105,15 @@ export default function HREmployees() {
     onError: (err: any) => toast.error(err?.response?.data?.message || 'Failed.'),
   });
 
+  const unlockMutation = useMutation({
+    mutationFn: (id: string) => api.patch(`/employees/${id}/unlock`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['hr-employees'] });
+      toast.success('Account unlocked.');
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.message || 'Failed to unlock.'),
+  });
+
   const openAdd = () => { setForm(EMPTY_FORM); setModal('add'); };
 
   const handleExport = async () => {
@@ -270,9 +279,14 @@ export default function HREmployees() {
                       <td className="table-cell text-xs">{e.user?.role?.replace(/_/g, ' ') ?? '—'}</td>
                       <td className="table-cell text-sm">{e.dateHired ? format(parseISO(e.dateHired), 'MMM d, yyyy') : '—'}</td>
                       <td className="table-cell">
-                        <span className={`badge ${e.isActive ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'}`}>
-                          {e.isActive ? 'Active' : 'Inactive'}
-                        </span>
+                        <div className="flex flex-col gap-1">
+                          <span className={`badge ${e.isActive ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'}`}>
+                            {e.isActive ? 'Active' : 'Inactive'}
+                          </span>
+                          {e.user?.lockedAt && (
+                            <span className="badge bg-orange-50 text-orange-700">🔒 Locked</span>
+                          )}
+                        </div>
                       </td>
                       <td className="table-cell">
                         <div className="flex gap-1 items-center">
@@ -288,6 +302,11 @@ export default function HREmployees() {
                           <button onClick={() => { if (confirm(`Archive ${e.firstName} ${e.lastName} as resigned? They will no longer appear in reports or dashboards.`)) archiveMutation.mutate(e.id); }} title="Archive" className="p-1.5 rounded-lg border border-orange-200 text-orange-600 hover:bg-orange-50 transition-colors">
                             <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" /></svg>
                           </button>
+                          {e.user?.lockedAt && (
+                            <button onClick={() => { if (confirm(`Unlock ${e.firstName} ${e.lastName}'s account?`)) unlockMutation.mutate(e.id); }} title="Unlock Account" className="p-1.5 rounded-lg border border-orange-200 text-orange-600 hover:bg-orange-50 transition-colors">
+                              <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" /></svg>
+                            </button>
+                          )}
                           <button onClick={() => confirmDelete(e)} title="Delete" className="p-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 transition-colors">
                             <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                           </button>
