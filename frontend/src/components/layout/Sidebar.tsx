@@ -16,7 +16,6 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Leave', path: '/leave', icon: '◈', roles: ['EMPLOYEE', 'DEPARTMENT_HEAD', 'HR', 'ADMIN'] },
   { label: 'Overtime', path: '/overtime', icon: '⊕', roles: ['EMPLOYEE', 'DEPARTMENT_HEAD', 'HR', 'ADMIN'] },
   { label: 'Corrections', path: '/corrections', icon: '✎', roles: ['EMPLOYEE', 'DEPARTMENT_HEAD', 'HR', 'ADMIN'] },
-  { label: 'My Profile', path: '/profile', icon: '◯', roles: ['EMPLOYEE', 'DEPARTMENT_HEAD', 'HR', 'ADMIN'] },
   // Dept Head
   { label: 'Team Overview', path: '/dept-head/dashboard', icon: '◉', roles: ['DEPARTMENT_HEAD', 'HR', 'ADMIN'] },
   { label: 'Approvals', path: '/dept-head/approvals', icon: '✓', roles: ['DEPARTMENT_HEAD', 'HR', 'ADMIN'] },
