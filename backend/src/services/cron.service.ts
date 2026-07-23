@@ -4,6 +4,9 @@ import { notificationService } from './notification.service';
 import { logger } from '../config/logger';
 import { phtToday, phtYear } from '../utils/timezone';
 
+// Days credited to REGULAR employees per month — single source of truth for all VL accrual logic
+const VL_ACCRUAL_AMOUNT = 1.25;
+
 export function scheduleCronJobs(): void {
   // Mark absent employees at 2 PM Philippine Time (UTC+8 = 06:00 UTC)
   cron.schedule('0 6 * * 1-5', async () => {
@@ -131,7 +134,6 @@ export function scheduleCronJobs(): void {
       const year = now.getFullYear();
       const monthStr = String(now.getMonth() + 1).padStart(2, '0');
       const accrualReason = `VL Monthly Accrual — ${year}-${monthStr}`;
-      const ACCRUAL_AMOUNT = 1.25;
 
       const employees = await prisma.employee.findMany({
         where: { employmentType: 'REGULAR', isActive: true, isArchived: false },
@@ -150,12 +152,13 @@ export function scheduleCronJobs(): void {
           where: { employeeId_year_leaveType: { employeeId: emp.id, year, leaveType: 'VACATION' } },
         });
 
-        const previousBalance = balance ? balance.totalDays - balance.usedDays - balance.pendingDays : 0;
+        // previousBalance = gross totalDays before this accrual (audit trail shows allocation growth)
+        const previousBalance = balance?.totalDays ?? 0;
 
         await prisma.leaveBalance.upsert({
           where: { employeeId_year_leaveType: { employeeId: emp.id, year, leaveType: 'VACATION' } },
-          update: { totalDays: { increment: ACCRUAL_AMOUNT } },
-          create: { employeeId: emp.id, year, leaveType: 'VACATION', totalDays: ACCRUAL_AMOUNT },
+          update: { totalDays: { increment: VL_ACCRUAL_AMOUNT } },
+          create: { employeeId: emp.id, year, leaveType: 'VACATION', totalDays: VL_ACCRUAL_AMOUNT },
         });
 
         await prisma.leaveAdjustment.create({
@@ -163,9 +166,9 @@ export function scheduleCronJobs(): void {
             employeeId: emp.id,
             leaveType: 'VACATION',
             year,
-            adjustmentAmount: ACCRUAL_AMOUNT,
+            adjustmentAmount: VL_ACCRUAL_AMOUNT,
             previousBalance,
-            newBalance: previousBalance + ACCRUAL_AMOUNT,
+            newBalance: previousBalance + VL_ACCRUAL_AMOUNT,
             reason: accrualReason,
             adjustedBy: null,
             isSystemGenerated: true,
