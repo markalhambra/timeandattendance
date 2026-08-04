@@ -317,7 +317,7 @@ export default function HrLeaveManagement() {
                             <td className={`px-4 py-2 text-right font-semibold ${adj.adjustmentAmount >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
                               {adj.adjustmentAmount >= 0 ? '+' : ''}{adj.adjustmentAmount.toFixed(2)}
                             </td>
-                            <td className="px-4 py-2 text-gray-600 max-w-xs truncate" title={adj.reason}>
+                            <td className="px-4 py-2 text-gray-600 min-w-[14rem] max-w-md whitespace-normal break-words align-top" title={adj.reason}>
                               {adj.reason}
                             </td>
                             <td className="px-4 py-2 text-gray-500 whitespace-nowrap">

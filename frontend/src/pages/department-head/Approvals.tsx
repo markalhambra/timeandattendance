@@ -144,13 +144,13 @@ export default function ApprovalsPage() {
                     <td className="table-cell">{format(parseISO(l.startDate), 'MMM d')}</td>
                     <td className="table-cell">{format(parseISO(l.endDate), 'MMM d, yyyy')}</td>
                     <td className="table-cell">{l.totalDays}</td>
-                    <td className="table-cell max-w-xs truncate text-gray-500 text-xs">{l.reason}</td>
+                    <td className="table-cell min-w-[14rem] max-w-md whitespace-normal break-words text-gray-500 text-xs align-top" title={l.reason}>{l.reason}</td>
                     <td className="table-cell">
                       {l.status === 'PENDING'
                         ? <span className="badge bg-yellow-50 text-yellow-700">PENDING</span>
                         : <span className={`badge ${l.status === 'APPROVED' ? 'badge-approved' : 'badge-rejected'}`}>{l.status}</span>}
                     </td>
-                    <td className="table-cell max-w-xs truncate text-gray-500 text-xs">{l.deptHeadNotes || '—'}</td>
+                    <td className="table-cell min-w-[14rem] max-w-md whitespace-normal break-words text-gray-500 text-xs align-top" title={l.deptHeadNotes || undefined}>{l.deptHeadNotes || '—'}</td>
                     <td className="table-cell text-gray-400 text-xs">{l.deptHeadAt ? format(parseISO(l.deptHeadAt), 'MMM d, yyyy') : '—'}</td>
                     <td className="table-cell">
                       {l.status === 'PENDING' && <ActionButtons type="leaves" id={l.id} name={`${l.employee?.firstName} ${l.employee?.lastName}`} ownerId={l.employeeId} />}
@@ -182,13 +182,13 @@ export default function ApprovalsPage() {
                     <td className="table-cell font-medium">{(o as any).employee?.firstName} {(o as any).employee?.lastName}</td>
                     <td className="table-cell">{format(parseISO(o.date), 'MMM d, yyyy')}</td>
                     <td className="table-cell font-semibold">{(o.minutes / 60).toFixed(1)}h</td>
-                    <td className="table-cell max-w-xs truncate text-gray-500 text-xs">{o.reason || '—'}</td>
+                    <td className="table-cell min-w-[14rem] max-w-md whitespace-normal break-words text-gray-500 text-xs align-top" title={o.reason || undefined}>{o.reason || '—'}</td>
                     <td className="table-cell">
                       {o.status === 'PENDING'
                         ? <span className="badge bg-yellow-50 text-yellow-700">PENDING</span>
                         : <span className={`badge ${o.status === 'APPROVED' ? 'badge-approved' : 'badge-rejected'}`}>{o.status}</span>}
                     </td>
-                    <td className="table-cell max-w-xs truncate text-gray-500 text-xs">{o.reviewerNotes || '—'}</td>
+                    <td className="table-cell min-w-[14rem] max-w-md whitespace-normal break-words text-gray-500 text-xs align-top" title={o.reviewerNotes || undefined}>{o.reviewerNotes || '—'}</td>
                     <td className="table-cell text-gray-400 text-xs">{o.reviewedAt ? format(parseISO(o.reviewedAt), 'MMM d, yyyy') : '—'}</td>
                     <td className="table-cell">
                       {o.status === 'PENDING' && <ActionButtons type="overtime" id={o.id} name={`${(o as any).employee?.firstName} ${(o as any).employee?.lastName}`} ownerId={o.employeeId} />}
@@ -213,7 +213,7 @@ export default function ApprovalsPage() {
                     <td className="table-cell">{c.attendance?.date ? format(parseISO(c.attendance.date), 'MMM d, yyyy') : '—'}</td>
                     <td className="table-cell">{c.requestedClockIn ? format(parseISO(c.requestedClockIn), 'hh:mm a') : '—'}</td>
                     <td className="table-cell">{c.requestedClockOut ? format(parseISO(c.requestedClockOut), 'hh:mm a') : '—'}</td>
-                    <td className="table-cell max-w-xs truncate text-gray-500 text-xs">{(c as any).reason}</td>
+                    <td className="table-cell min-w-[14rem] max-w-md whitespace-normal break-words text-gray-500 text-xs align-top" title={(c as any).reason}>{(c as any).reason}</td>
                     <td className="table-cell"><ActionButtons type="corrections" id={c.id} name={`${(c as any).employee?.firstName} ${(c as any).employee?.lastName}`} ownerId={c.employeeId} /></td>
                   </tr>
                 ))}
@@ -243,7 +243,7 @@ export default function ApprovalsPage() {
                         <td className="table-cell">
                           <span className={`badge ${c.status === 'APPROVED' ? 'badge-approved' : 'badge-rejected'}`}>{c.status}</span>
                         </td>
-                        <td className="table-cell max-w-xs truncate text-gray-500 text-xs">{c.reviewerNotes || '—'}</td>
+                        <td className="table-cell min-w-[14rem] max-w-md whitespace-normal break-words text-gray-500 text-xs align-top" title={c.reviewerNotes || undefined}>{c.reviewerNotes || '—'}</td>
                         <td className="table-cell text-gray-400 text-xs">{c.reviewedAt ? format(parseISO(c.reviewedAt), 'MMM d, yyyy') : '—'}</td>
                       </tr>
                     ))}
@@ -303,7 +303,7 @@ export default function ApprovalsPage() {
                           <td className="table-cell">{(c.minutesToConvert / 60).toFixed(1)}h</td>
                           <td className="table-cell"><span className={`badge ${c.status === 'APPROVED' ? 'badge-approved' : 'badge-rejected'}`}>{c.status}</span></td>
                           <td className="table-cell text-xs text-gray-600">{reviewedBy}</td>
-                          <td className="table-cell max-w-xs truncate text-gray-500 text-xs">{c.reviewerNotes || '—'}</td>
+                          <td className="table-cell min-w-[14rem] max-w-md whitespace-normal break-words text-gray-500 text-xs align-top" title={c.reviewerNotes || undefined}>{c.reviewerNotes || '—'}</td>
                           <td className="table-cell text-gray-400 text-xs">{reviewedAt ? format(parseISO(reviewedAt as string), 'MMM d, yyyy') : '—'}</td>
                         </tr>
                       );

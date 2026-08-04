@@ -46,7 +46,7 @@ export default function CorrectionsPage() {
                     <td className="table-cell">{c.requestedClockIn ? format(parseISO(c.requestedClockIn), 'hh:mm a') : '—'}</td>
                     <td className="table-cell">{c.requestedClockOut ? format(parseISO(c.requestedClockOut), 'hh:mm a') : '—'}</td>
                     <td className="table-cell">{statusBadge(c.status)}</td>
-                    <td className="table-cell max-w-xs truncate text-gray-500 text-xs">{c.reviewerNotes || '—'}</td>
+                    <td className="table-cell min-w-[14rem] max-w-md whitespace-normal break-words text-gray-500 text-xs align-top" title={c.reviewerNotes || undefined}>{c.reviewerNotes || '—'}</td>
                     <td className="table-cell text-gray-400 text-xs">{format(parseISO(c.createdAt), 'MMM d, yyyy')}</td>
                   </tr>
                 ))
