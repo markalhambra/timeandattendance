@@ -20,7 +20,7 @@ const LEAVE_TYPE_LABELS: Record<string, string> = {
   MATERNITY: 'Maternity Leave',
   PATERNITY: 'Paternity Leave',
   BEREAVEMENT: 'Bereavement Leave',
-  MAGNA_CARTA_WOMEN: 'Magna Carta for Women',
+  MAGNA_CARTA_WOMEN: 'Special Leave for Women (RA 9170)',
   LWOP: 'Leave Without Pay',
 };
 

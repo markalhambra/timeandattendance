@@ -210,7 +210,7 @@ Welcome! This guide walks you through everything available to you as an Employee
 | Emergency Leave | Urgent personal or family situations. Shares the 15-day Sick Leave balance. |
 | Pamilya Muna Leave (PML) | Family-related leave |
 | Solo Parent Leave | For employees with a valid Solo Parent ID |
-| Magna Carta Leave | For qualified medical procedures under RA 9710 |
+| Special Leave for Women (RA 9170) | Special leave for women under RA 9170 |
 | Maternity Leave | For maternity purposes |
 | Paternity Leave | For fathers upon the birth of a child |
 | Bereavement Leave | Death of an immediate family member |

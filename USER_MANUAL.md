@@ -141,7 +141,7 @@ Supported leave types:
 - Maternity Leave
 - Paternity Leave
 - Bereavement Leave
-- Magna Carta for Women Leave
+- Special Leave for Women (RA 9170)
 
 Approval flow:
 1. Department Head review
@@ -600,7 +600,7 @@ Supported leave types:
 - Maternity Leave
 - Paternity Leave
 - Bereavement Leave
-- Magna Carta for Women Leave
+- Special Leave for Women (RA 9170)
 
 How to file leave:
 1. Go to Leave page.

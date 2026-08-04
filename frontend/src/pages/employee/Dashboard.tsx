@@ -48,7 +48,7 @@ export default function EmployeeDashboard() {
     MATERNITY: 'Maternity Leave',
     PATERNITY: 'Paternity Leave',
     BEREAVEMENT: 'Bereavement Leave',
-    MAGNA_CARTA_WOMEN: 'Magna Carta for Women Leave',
+    MAGNA_CARTA_WOMEN: 'Special Leave for Women (RA 9170)',
   };
 
   const today = new Date().toLocaleDateString('en-PH', { timeZone: 'Asia/Manila', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });

@@ -16,7 +16,7 @@ const LEAVE_TYPES: { value: LeaveType; label: string; desc: string }[] = [
   { value: 'MATERNITY', label: 'Maternity Leave', desc: 'For childbirth and recovery' },
   { value: 'PATERNITY', label: 'Paternity Leave', desc: 'For fathers after childbirth' },
   { value: 'BEREAVEMENT', label: 'Bereavement Leave', desc: 'For the loss of a family member' },
-  { value: 'MAGNA_CARTA_WOMEN', label: 'Magna Carta for Women Leave', desc: 'For qualified benefits under the Magna Carta of Women' },
+  { value: 'MAGNA_CARTA_WOMEN', label: 'Special Leave for Women (RA 9170)', desc: 'Special leave for women under RA 9170' },
   { value: 'LWOP', label: 'Leave Without Pay', desc: 'Unpaid leave — no balance required' },
 ];
 

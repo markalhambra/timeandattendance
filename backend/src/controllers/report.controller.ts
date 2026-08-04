@@ -135,7 +135,7 @@ export async function leaveReport(req: AuthRequest, res: Response): Promise<void
       MATERNITY: 'Maternity Leave',
       PATERNITY: 'Paternity Leave',
       BEREAVEMENT: 'Bereavement Leave',
-      MAGNA_CARTA_WOMEN: 'Magna Carta for Women Leave',
+      MAGNA_CARTA_WOMEN: 'Special Leave for Women (RA 9170)',
     };
 
     const summary = leaves.map((l) => ({
