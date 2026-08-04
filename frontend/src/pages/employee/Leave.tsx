@@ -10,13 +10,15 @@ const LEAVE_TYPES: { value: LeaveType; label: string; desc: string }[] = [
   { value: 'SICK', label: 'Sick Leave', desc: 'For illness or medical appointments' },
   { value: 'VACATION', label: 'Vacation Leave', desc: 'For personal time off' },
   { value: 'PML', label: 'Pamilya Muna Leave', desc: 'For family-related matters' },
-  { value: 'SML', label: 'Sarili Muna Leave', desc: 'For personal wellness' },
+  { value: 'SML', label: 'Sarili Muna Leave', desc: '7 days/year; 3.5 days credited every January 1 and July 1' },
   { value: 'EMERGENCY', label: 'Emergency Leave', desc: 'For urgent and unexpected situations' },
   { value: 'SOLO_PARENT', label: 'Solo Parent Leave', desc: 'For qualified solo parents' },
   { value: 'MATERNITY', label: 'Maternity Leave', desc: 'For childbirth and recovery' },
   { value: 'PATERNITY', label: 'Paternity Leave', desc: 'For fathers after childbirth' },
   { value: 'BEREAVEMENT', label: 'Bereavement Leave', desc: 'For the loss of a family member' },
   { value: 'MAGNA_CARTA_WOMEN', label: 'Special Leave for Women (RA 9170)', desc: 'Special leave for women under RA 9170' },
+  { value: 'CALAMITY', label: 'Calamity Leave (CL)', desc: '3 days. Not charged against regular leave credits. Must be used within 10 days of the calamity.' },
+  { value: 'VAWC', label: 'VAWC Leave', desc: '10 days paid (RA 9262). May be taken continuously or intermittently. Requires barangay/court certification.' },
   { value: 'LWOP', label: 'Leave Without Pay', desc: 'Unpaid leave — no balance required' },
 ];
 

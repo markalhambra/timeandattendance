@@ -8,6 +8,7 @@ import type { Employee, LeaveBalance, LeaveAdjustment, LeaveType } from '../../t
 const ADJUSTABLE_LEAVE_TYPES: LeaveType[] = [
   'SICK', 'VACATION', 'PML', 'SML', 'EMERGENCY',
   'SOLO_PARENT', 'MATERNITY', 'PATERNITY', 'BEREAVEMENT', 'MAGNA_CARTA_WOMEN',
+  'CALAMITY', 'VAWC',
 ];
 
 const LEAVE_TYPE_LABELS: Record<string, string> = {
@@ -21,6 +22,8 @@ const LEAVE_TYPE_LABELS: Record<string, string> = {
   PATERNITY: 'Paternity Leave',
   BEREAVEMENT: 'Bereavement Leave',
   MAGNA_CARTA_WOMEN: 'Special Leave for Women (RA 9170)',
+  CALAMITY: 'Calamity Leave (CL)',
+  VAWC: 'VAWC Leave',
   LWOP: 'Leave Without Pay',
 };
 

@@ -2,7 +2,7 @@
 
 export type Role = 'EMPLOYEE' | 'DEPARTMENT_HEAD' | 'HR' | 'ADMIN';
 export type AttendanceStatus = 'ON_SITE' | 'WFH' | 'OB' | 'ABSENT';
-export type LeaveType = 'SICK' | 'VACATION' | 'PML' | 'SML' | 'EMERGENCY' | 'SOLO_PARENT' | 'MATERNITY' | 'PATERNITY' | 'BEREAVEMENT' | 'MAGNA_CARTA_WOMEN' | 'LWOP';
+export type LeaveType = 'SICK' | 'VACATION' | 'PML' | 'SML' | 'EMERGENCY' | 'SOLO_PARENT' | 'MATERNITY' | 'PATERNITY' | 'BEREAVEMENT' | 'MAGNA_CARTA_WOMEN' | 'CALAMITY' | 'VAWC' | 'LWOP';
 export type ApprovalStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
 export type OvertimeConversionType = 'CTO' | 'CDO';
 export type EmploymentType = 'REGULAR' | 'PROBATIONARY' | 'CONTRACTUAL' | 'INTERN';

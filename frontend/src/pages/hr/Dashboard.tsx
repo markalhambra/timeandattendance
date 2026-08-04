@@ -70,6 +70,8 @@ export default function HRDashboard() {
     PATERNITY: 'Paternity Leave',
     BEREAVEMENT: 'Bereavement Leave',
     MAGNA_CARTA_WOMEN: 'Special Leave for Women (RA 9170)',
+    CALAMITY: 'Calamity Leave (CL)',
+    VAWC: 'VAWC Leave',
   };
 
   const allItems: any[] = useMemo(() => [
@@ -183,6 +185,8 @@ export default function HRDashboard() {
               <option value="PATERNITY">Paternity Leave</option>
               <option value="BEREAVEMENT">Bereavement Leave</option>
               <option value="MAGNA_CARTA_WOMEN">Special Leave for Women (RA 9170)</option>
+              <option value="CALAMITY">Calamity Leave (CL)</option>
+              <option value="VAWC">VAWC Leave</option>
               <option value="CTO">CTO</option>
               <option value="CDO">CDO</option>
             </select>

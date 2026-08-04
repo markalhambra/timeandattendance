@@ -34,6 +34,8 @@ const LEAVE_COLORS: Record<string, { bg: string; text: string; label: string }> 
   PATERNITY: { bg: 'bg-sky-100', text: 'text-sky-700', label: 'Paternity Leave' },
   BEREAVEMENT: { bg: 'bg-slate-100', text: 'text-slate-700', label: 'Bereavement Leave' },
   MAGNA_CARTA_WOMEN: { bg: 'bg-rose-100', text: 'text-rose-700', label: 'Special Leave for Women (RA 9170)' },
+  CALAMITY: { bg: 'bg-amber-100', text: 'text-amber-800', label: 'Calamity Leave (CL)' },
+  VAWC: { bg: 'bg-indigo-100', text: 'text-indigo-700', label: 'VAWC Leave' },
 };
 const CONV_COLORS: Record<string, { bg: string; text: string; label: string }> = {
   CTO: { bg: 'bg-amber-100',  text: 'text-amber-700',  label: 'CTO' },

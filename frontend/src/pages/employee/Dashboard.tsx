@@ -49,6 +49,8 @@ export default function EmployeeDashboard() {
     PATERNITY: 'Paternity Leave',
     BEREAVEMENT: 'Bereavement Leave',
     MAGNA_CARTA_WOMEN: 'Special Leave for Women (RA 9170)',
+    CALAMITY: 'Calamity Leave (CL)',
+    VAWC: 'VAWC Leave',
   };
 
   const today = new Date().toLocaleDateString('en-PH', { timeZone: 'Asia/Manila', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });

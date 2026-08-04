@@ -10,13 +10,15 @@ const LEAVE_BALANCE_DEFAULTS: Record<LeaveType, number> = {
   SICK: 15,
   VACATION: 15,
   PML: 7,
-  SML: 3,
+  SML: 7,
   EMERGENCY: 15,
   SOLO_PARENT: 7,
   MATERNITY: 105,
   PATERNITY: 7,
   BEREAVEMENT: 5,
   MAGNA_CARTA_WOMEN: 60,
+  CALAMITY: 3,
+  VAWC: 10,
   LWOP: 0, // no balance tracking — unpaid leave
 };
 
@@ -84,6 +86,16 @@ export async function fileLeave(req: AuthRequest, res: Response): Promise<void> 
     }
 
     const totalDays = isHalfDay ? 0.5 : Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+
+    // Soft per-request caps for special leave types
+    if (leaveType === 'CALAMITY' && totalDays > 3) {
+      res.status(400).json({ success: false, message: 'Calamity Leave is limited to 3 days per request.' });
+      return;
+    }
+    if (leaveType === 'VAWC' && totalDays > 10) {
+      res.status(400).json({ success: false, message: 'VAWC Leave is limited to 10 days per request.' });
+      return;
+    }
 
     const year = start.getFullYear();
 

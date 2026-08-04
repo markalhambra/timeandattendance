@@ -6,6 +6,8 @@ import { phtToday, phtYear } from '../utils/timezone';
 
 // Days credited to REGULAR employees per month — single source of truth for all VL accrual logic
 const VL_ACCRUAL_AMOUNT = 1.25;
+// Sarili Muna Leave — 3.5 days credited every January 1 and July 1 (PHT)
+const SML_ACCRUAL_AMOUNT = 3.5;
 
 export function scheduleCronJobs(): void {
   // Mark absent employees at 2 PM Philippine Time (UTC+8 = 06:00 UTC)
@@ -180,6 +182,61 @@ export function scheduleCronJobs(): void {
       logger.info(`VL accrual complete: ${accrued} of ${employees.length} employees credited.`);
     } catch (err) {
       logger.error('VL accrual cron error:', err);
+    }
+  }, { timezone: 'Asia/Manila' });
+
+  // Semi-annual SML accrual on January 1 and July 1 at midnight PHT
+  cron.schedule('0 0 1 1,7 *', async () => {
+    logger.info('Cron: Running semi-annual SML accrual...');
+    try {
+      const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Manila' }));
+      const year = now.getFullYear();
+      const half = now.getMonth() === 0 ? 'H1' : 'H2';
+      const accrualReason = `SML Semi-Annual Accrual — ${year}-${half}`;
+
+      const employees = await prisma.employee.findMany({
+        where: { isActive: true, isArchived: false },
+        select: { id: true },
+      });
+
+      let accrued = 0;
+      for (const emp of employees) {
+        const alreadyRan = await prisma.leaveAdjustment.count({
+          where: { employeeId: emp.id, isSystemGenerated: true, leaveType: 'SML', year, reason: accrualReason },
+        });
+        if (alreadyRan > 0) continue;
+
+        const balance = await prisma.leaveBalance.findUnique({
+          where: { employeeId_year_leaveType: { employeeId: emp.id, year, leaveType: 'SML' } },
+        });
+
+        const previousBalance = balance?.totalDays ?? 0;
+
+        await prisma.leaveBalance.upsert({
+          where: { employeeId_year_leaveType: { employeeId: emp.id, year, leaveType: 'SML' } },
+          update: { totalDays: { increment: SML_ACCRUAL_AMOUNT } },
+          create: { employeeId: emp.id, year, leaveType: 'SML', totalDays: SML_ACCRUAL_AMOUNT },
+        });
+
+        await prisma.leaveAdjustment.create({
+          data: {
+            employeeId: emp.id,
+            leaveType: 'SML',
+            year,
+            adjustmentAmount: SML_ACCRUAL_AMOUNT,
+            previousBalance,
+            newBalance: previousBalance + SML_ACCRUAL_AMOUNT,
+            reason: accrualReason,
+            adjustedBy: null,
+            isSystemGenerated: true,
+          },
+        });
+
+        accrued++;
+      }
+      logger.info(`SML accrual complete: ${accrued} of ${employees.length} employees credited.`);
+    } catch (err) {
+      logger.error('SML accrual cron error:', err);
     }
   }, { timezone: 'Asia/Manila' });
 }

@@ -87,6 +87,8 @@ export default function ApprovalsPage() {
     PATERNITY: 'Paternity Leave',
     BEREAVEMENT: 'Bereavement Leave',
     MAGNA_CARTA_WOMEN: 'Special Leave for Women (RA 9170)',
+    CALAMITY: 'Calamity Leave (CL)',
+    VAWC: 'VAWC Leave',
   };
 
   const ActionButtons = ({ type, id, name, ownerId }: { type: Tab; id: string; name: string; ownerId?: string }) => {

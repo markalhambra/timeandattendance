@@ -6,6 +6,8 @@ import { phtToday, phtYear } from '../utils/timezone';
 
 // Days credited to REGULAR employees per month — single source of truth for all VL accrual logic
 const VL_ACCRUAL_AMOUNT = 1.25;
+// Sarili Muna Leave — 3.5 days credited every January 1 and July 1 (PHT)
+const SML_ACCRUAL_AMOUNT = 3.5;
 
 /**
  * Vercel cron jobs call these endpoints via HTTP GET with an Authorization header.
@@ -105,7 +107,7 @@ export async function cronExpireApprovedOvertime(req: Request, res: Response): P
 // Combines: expire-pending OT, expire-approved OT, expiration-alerts, and monthly VL accrual (1st of month PHT)
 export async function cronDailyMaintenance(req: Request, res: Response): Promise<void> {
   if (!verifyCronAuth(req, res)) return;
-  const results: Record<string, number> = { expiredPending: 0, expiredApproved: 0, alerted: 0, vlAccrued: 0 };
+  const results: Record<string, number> = { expiredPending: 0, expiredApproved: 0, alerted: 0, vlAccrued: 0, smlAccrued: 0 };
   try {
     // 1. Expire pending overtime (>1 month)
     const expiredPending = await prisma.overtimeRecord.updateMany({
@@ -187,6 +189,48 @@ export async function cronDailyMaintenance(req: Request, res: Response): Promise
       }
       results.vlAccrued = accrued;
       logger.info(`VL accrual (via daily-maintenance): ${accrued}/${employees.length} employees credited.`);
+    }
+
+    // 5. Semi-annual SML accrual — runs only on January 1 and July 1 (PHT)
+    if (phtNow.getDate() === 1 && (phtNow.getMonth() === 0 || phtNow.getMonth() === 6)) {
+      const year = phtNow.getFullYear();
+      const half = phtNow.getMonth() === 0 ? 'H1' : 'H2';
+      const accrualReason = `SML Semi-Annual Accrual — ${year}-${half}`;
+
+      const employees = await prisma.employee.findMany({
+        where: { isActive: true, isArchived: false },
+        select: { id: true },
+      });
+
+      let accrued = 0;
+      for (const emp of employees) {
+        const alreadyRan = await prisma.leaveAdjustment.count({
+          where: { employeeId: emp.id, isSystemGenerated: true, leaveType: 'SML', year, reason: accrualReason },
+        });
+        if (alreadyRan > 0) continue;
+
+        const balance = await prisma.leaveBalance.findUnique({
+          where: { employeeId_year_leaveType: { employeeId: emp.id, year, leaveType: 'SML' } },
+        });
+        const previousBalance = balance?.totalDays ?? 0;
+
+        await prisma.leaveBalance.upsert({
+          where: { employeeId_year_leaveType: { employeeId: emp.id, year, leaveType: 'SML' } },
+          update: { totalDays: { increment: SML_ACCRUAL_AMOUNT } },
+          create: { employeeId: emp.id, year, leaveType: 'SML', totalDays: SML_ACCRUAL_AMOUNT },
+        });
+        await prisma.leaveAdjustment.create({
+          data: {
+            employeeId: emp.id, leaveType: 'SML', year,
+            adjustmentAmount: SML_ACCRUAL_AMOUNT, previousBalance,
+            newBalance: previousBalance + SML_ACCRUAL_AMOUNT,
+            reason: accrualReason, adjustedBy: null, isSystemGenerated: true,
+          },
+        });
+        accrued++;
+      }
+      results.smlAccrued = accrued;
+      logger.info(`SML accrual (via daily-maintenance): ${accrued}/${employees.length} employees credited.`);
     }
 
     logger.info(`Cron daily-maintenance: ${JSON.stringify(results)}`);

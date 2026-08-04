@@ -149,13 +149,15 @@ export async function createEmployee(req: AuthRequest, res: Response): Promise<v
         { employeeId: empId, year, leaveType: 'SICK', totalDays: 10 },
         { employeeId: empId, year, leaveType: 'VACATION', totalDays: 15 },
         { employeeId: empId, year, leaveType: 'PML', totalDays: 7 },
-        { employeeId: empId, year, leaveType: 'SML', totalDays: 3 },
+        { employeeId: empId, year, leaveType: 'SML', totalDays: 7 },
         { employeeId: empId, year, leaveType: 'EMERGENCY', totalDays: 3 },
         { employeeId: empId, year, leaveType: 'SOLO_PARENT', totalDays: 7 },
         { employeeId: empId, year, leaveType: 'MATERNITY', totalDays: 105 },
         { employeeId: empId, year, leaveType: 'PATERNITY', totalDays: 7 },
         { employeeId: empId, year, leaveType: 'BEREAVEMENT', totalDays: 5 },
         { employeeId: empId, year, leaveType: 'MAGNA_CARTA_WOMEN', totalDays: 60 },
+        { employeeId: empId, year, leaveType: 'CALAMITY', totalDays: 3 },
+        { employeeId: empId, year, leaveType: 'VAWC', totalDays: 10 },
       ],
     });
 
@@ -700,13 +702,15 @@ export async function importEmployees(req: AuthRequest, res: Response): Promise<
             { employeeId: empId, year, leaveType: 'SICK', totalDays: 10 },
             { employeeId: empId, year, leaveType: 'VACATION', totalDays: 15 },
             { employeeId: empId, year, leaveType: 'PML', totalDays: 7 },
-            { employeeId: empId, year, leaveType: 'SML', totalDays: 3 },
+            { employeeId: empId, year, leaveType: 'SML', totalDays: 7 },
             { employeeId: empId, year, leaveType: 'EMERGENCY', totalDays: 3 },
             { employeeId: empId, year, leaveType: 'SOLO_PARENT', totalDays: 7 },
             { employeeId: empId, year, leaveType: 'MATERNITY', totalDays: 105 },
             { employeeId: empId, year, leaveType: 'PATERNITY', totalDays: 7 },
             { employeeId: empId, year, leaveType: 'BEREAVEMENT', totalDays: 5 },
             { employeeId: empId, year, leaveType: 'MAGNA_CARTA_WOMEN', totalDays: 60 },
+            { employeeId: empId, year, leaveType: 'CALAMITY', totalDays: 3 },
+            { employeeId: empId, year, leaveType: 'VAWC', totalDays: 10 },
           ],
         });
 
