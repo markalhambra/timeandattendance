@@ -9,6 +9,7 @@ import crypto from 'crypto';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import XLSX from 'xlsx';
+import { getHeadedDepartmentIds } from '../utils/departmentHead';
 
 export async function getMyProfile(req: AuthRequest, res: Response): Promise<void> {
   try {
@@ -52,8 +53,9 @@ export async function getEmployees(req: AuthRequest, res: Response): Promise<voi
       if (isActive !== undefined) where.isActive = isActive === 'true';
     }
     if (req.user!.role === 'DEPARTMENT_HEAD') {
-      const deptId = req.user!.departmentId;
-      if (deptId) where.departmentId = deptId;
+      const headedIds = await getHeadedDepartmentIds(req.user!.sub);
+      if (headedIds.length) where.departmentId = { in: headedIds };
+      else where.departmentId = { in: [] };
     } else if (departmentId) {
       where.departmentId = departmentId;
     }
@@ -86,19 +88,23 @@ export async function getEmployees(req: AuthRequest, res: Response): Promise<voi
 export async function createEmployee(req: AuthRequest, res: Response): Promise<void> {
   const { email, firstName, lastName, middleName, mobile, address, designation, departmentId, dateHired, role,
           nickname, gender, birthday, emergencyContact, emergencyContactNumber,
-          sssNumber, pagibigNumber, philhealthNumber, tinNumber, employmentType } = req.body;
+          sssNumber, pagibigNumber, philhealthNumber, tinNumber, employmentType, employeeNumber: rawEmployeeNumber } = req.body;
 
   try {
     const exists = await prisma.user.findUnique({ where: { email } });
     if (exists) { res.status(400).json({ success: false, message: 'Email already exists.' }); return; }
 
-    // Use MAX(employeeNumber) to correctly handle deletions and avoid race conditions
-    const lastEmployee = await prisma.employee.findFirst({
-      orderBy: { employeeNumber: 'desc' },
-      select: { employeeNumber: true },
-    });
-    const lastNum = lastEmployee ? parseInt(lastEmployee.employeeNumber.replace('EMP-', ''), 10) || 0 : 0;
-    const employeeNumber = `EMP-${String(lastNum + 1).padStart(4, '0')}`;
+    const employeeNumber = typeof rawEmployeeNumber === 'string' ? rawEmployeeNumber.trim() : '';
+    if (!employeeNumber) {
+      res.status(400).json({ success: false, message: 'Employee number is required.' });
+      return;
+    }
+    const empNoTaken = await prisma.employee.findUnique({ where: { employeeNumber } });
+    if (empNoTaken) {
+      res.status(400).json({ success: false, message: 'Employee number already exists.' });
+      return;
+    }
+
     const tempPassword = crypto.randomBytes(8).toString('hex');
     const hashed = await bcrypt.hash(tempPassword, 12);
 
@@ -191,7 +197,8 @@ export async function getEmployee(req: AuthRequest, res: Response): Promise<void
 export async function updateEmployee(req: AuthRequest, res: Response): Promise<void> {
   const { email, firstName, lastName, middleName, mobile, address, designation, departmentId, dateHired, role,
           sssNumber, pagibigNumber, philhealthNumber, tinNumber,
-          nickname, gender, birthday, emergencyContact, emergencyContactNumber, employmentType } = req.body;
+          nickname, gender, birthday, emergencyContact, emergencyContactNumber, employmentType,
+          employeeNumber: rawEmployeeNumber } = req.body;
   try {
     const existing = await prisma.employee.findUnique({
       where: { id: req.params.id },
@@ -208,10 +215,30 @@ export async function updateEmployee(req: AuthRequest, res: Response): Promise<v
       if (taken) { res.status(400).json({ success: false, message: 'Email is already in use by another account.' }); return; }
     }
 
+    let employeeNumberUpdate: string | undefined;
+    if (rawEmployeeNumber !== undefined && rawEmployeeNumber !== null) {
+      const nextEmpNo = typeof rawEmployeeNumber === 'string' ? rawEmployeeNumber.trim() : '';
+      if (!nextEmpNo) {
+        res.status(400).json({ success: false, message: 'Employee number is required.' });
+        return;
+      }
+      if (nextEmpNo !== existing.employeeNumber) {
+        const empNoTaken = await prisma.employee.findFirst({
+          where: { employeeNumber: nextEmpNo, id: { not: existing.id } },
+        });
+        if (empNoTaken) {
+          res.status(400).json({ success: false, message: 'Employee number already exists.' });
+          return;
+        }
+        employeeNumberUpdate = nextEmpNo;
+      }
+    }
+
     const employee = await prisma.employee.update({
       where: { id: req.params.id },
       data: { firstName, lastName, middleName, mobile, address, designation, departmentId,
                email: newEmail ?? undefined,
+               employeeNumber: employeeNumberUpdate,
                dateHired: dateHired ? new Date(dateHired) : undefined,
                sssNumber, pagibigNumber, philhealthNumber, tinNumber,
                nickname, gender,
@@ -230,14 +257,10 @@ export async function updateEmployee(req: AuthRequest, res: Response): Promise<v
       await prisma.user.update({ where: { id: existing.userId }, data: userUpdates });
     }
 
-    // If this employee is a department head, keep Department.headId in sync
+    // If DEPARTMENT_HEAD and home dept set, ensure they are head of home dept only
+    // (do not clear other departments they already head — multi-dept approvers allowed)
     const targetDeptId = departmentId || existing.departmentId;
     if (effectiveRole === 'DEPARTMENT_HEAD' && targetDeptId) {
-      // Clear headId from any old department they headed
-      await prisma.department.updateMany({
-        where: { headId: existing.userId, id: { not: targetDeptId } },
-        data: { headId: null },
-      });
       await prisma.department.update({
         where: { id: targetDeptId },
         data: { headId: existing.userId },

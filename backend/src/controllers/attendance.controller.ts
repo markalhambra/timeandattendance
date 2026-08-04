@@ -4,11 +4,10 @@ import { prisma } from '../config/database';
 import { AttendanceStatus, ApprovalStatus } from '@prisma/client';
 import { notificationService } from '../services/notification.service';
 import { phtToday, phtYear, phtMonth } from '../utils/timezone';
+import { getHeadedDepartmentIds } from '../utils/departmentHead';
+import { settingsService } from '../services/settings.service';
 
-const OFFICE_LAT = parseFloat(process.env.OFFICE_LAT || '14.5995');
-const OFFICE_LNG = parseFloat(process.env.OFFICE_LNG || '120.9842');
-const OFFICE_RADIUS = parseFloat(process.env.OFFICE_RADIUS_METERS || '200');
-const OVERTIME_THRESHOLD_MINUTES = 9 * 60; // 9 hours
+const MIN_FILEABLE_OT_MINUTES = 60; // 1 hour minimum to create/file OT
 
 function haversineDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371000; // meters
@@ -58,8 +57,9 @@ export async function clockIn(req: AuthRequest, res: Response): Promise<void> {
       return;
     }
 
-    const distance = haversineDistance(latitude, longitude, OFFICE_LAT, OFFICE_LNG);
-    const isOnsite = distance <= OFFICE_RADIUS;
+    const office = await settingsService.getOfficeSettings();
+    const distance = haversineDistance(latitude, longitude, office.lat, office.lng);
+    const isOnsite = distance <= office.radiusMeters;
 
     let attendanceStatus: AttendanceStatus;
     if (isOnsite) {
@@ -160,7 +160,8 @@ export async function clockOut(req: AuthRequest, res: Response): Promise<void> {
 
     const now = new Date();
     const workingMinutes = Math.floor((now.getTime() - record.clockIn.getTime()) / 60000);
-    const overtimeMinutes = Math.max(0, workingMinutes - OVERTIME_THRESHOLD_MINUTES);
+    const otThresholdMinutes = await settingsService.getOtThresholdMinutes();
+    const overtimeMinutes = Math.max(0, workingMinutes - otThresholdMinutes);
 
     const updated = await prisma.attendanceRecord.update({
       where: { id: record.id },
@@ -175,8 +176,8 @@ export async function clockOut(req: AuthRequest, res: Response): Promise<void> {
       },
     });
 
-    // Auto-generate overtime record (draft — employee must click "File OT" before HR/dept head can see it)
-    if (overtimeMinutes > 0) {
+    // Auto-generate overtime record only if OT is at least 1 hour (draft — employee must File OT)
+    if (overtimeMinutes >= MIN_FILEABLE_OT_MINUTES) {
       const pendingExpiry = new Date();
       pendingExpiry.setMonth(pendingExpiry.getMonth() + 1);
       await prisma.overtimeRecord.create({
@@ -385,11 +386,11 @@ export async function getCorrections(req: AuthRequest, res: Response): Promise<v
     const where: any = {};
     if (status) where.status = status;
 
-    // Dept heads only see their department
+    // Dept heads only see headed departments
     if (req.user!.role === 'DEPARTMENT_HEAD') {
-      const deptId = req.user!.departmentId;
-      if (!deptId) { res.json({ success: true, data: [], meta: { total: 0, page: parseInt(page), limit: parseInt(limit) } }); return; }
-      where.employee = { departmentId: deptId };
+      const headedIds = await getHeadedDepartmentIds(req.user!.sub);
+      if (!headedIds.length) { res.json({ success: true, data: [], meta: { total: 0, page: parseInt(page), limit: parseInt(limit) } }); return; }
+      where.employee = { departmentId: { in: headedIds } };
     } else if (departmentId) {
       where.employee = { departmentId };
     }
@@ -432,10 +433,10 @@ export async function reviewCorrection(req: AuthRequest, res: Response): Promise
       res.status(403).json({ success: false, message: 'You cannot approve your own request.' }); return;
     }
 
-    // Ensure dept head only reviews their own department's corrections
+    // Ensure dept head only reviews headed departments' corrections
     if (req.user!.role === 'DEPARTMENT_HEAD') {
-      const deptId = req.user!.departmentId;
-      if (!deptId || correction.employee.departmentId !== deptId) {
+      const headedIds = await getHeadedDepartmentIds(req.user!.sub);
+      if (!correction.employee.departmentId || !headedIds.includes(correction.employee.departmentId)) {
         res.status(403).json({ success: false, message: 'You can only review corrections from your department.' }); return;
       }
     }
@@ -464,19 +465,20 @@ export async function reviewCorrection(req: AuthRequest, res: Response): Promise
         const workingMinutes = Math.floor(
           (effectiveClockOut.getTime() - effectiveClockIn.getTime()) / 60000,
         );
+        const otThresholdMinutes = await settingsService.getOtThresholdMinutes();
         updateData.workingMinutes = workingMinutes;
-        updateData.overtimeMinutes = Math.max(0, workingMinutes - OVERTIME_THRESHOLD_MINUTES);
+        updateData.overtimeMinutes = Math.max(0, workingMinutes - otThresholdMinutes);
       }
 
       // mark attendance as manually corrected
       updateData.isManual = true;
       await prisma.attendanceRecord.update({ where: { id: correction.attendanceId }, data: updateData });
 
-      // Sync OvertimeRecord — remove old entry and recreate with corrected hours
+      // Sync OvertimeRecord — remove old entry and recreate only if OT is at least 1 hour
       await prisma.overtimeRecord.deleteMany({ where: { attendanceId: correction.attendanceId } });
 
       const newOvertimeMinutes = updateData.overtimeMinutes ?? 0;
-      if (newOvertimeMinutes > 0 && effectiveClockIn && effectiveClockOut) {
+      if (newOvertimeMinutes >= MIN_FILEABLE_OT_MINUTES && effectiveClockIn && effectiveClockOut) {
         const pendingExpiry = new Date();
         pendingExpiry.setMonth(pendingExpiry.getMonth() + 1);
         await prisma.overtimeRecord.create({
@@ -518,7 +520,7 @@ export async function reviewCorrection(req: AuthRequest, res: Response): Promise
 }
 
 export async function getAllAttendance(req: AuthRequest, res: Response): Promise<void> {
-  const { startDate, endDate, departmentId, employeeId, status, page = '1', limit = '50' } = req.query as Record<string, string>;
+  const { startDate, endDate, departmentId, employeeId, status, search, page = '1', limit = '50' } = req.query as Record<string, string>;
   const skip = (parseInt(page) - 1) * parseInt(limit);
 
   try {
@@ -530,18 +532,31 @@ export async function getAllAttendance(req: AuthRequest, res: Response): Promise
       if (endDate) where.date.lte = new Date(endDate);
     }
     if (employeeId) where.employeeId = employeeId;
+
+    const employeeFilter: any = {};
     if (req.user!.role === 'DEPARTMENT_HEAD') {
-      const dept = await prisma.department.findFirst({ where: { headId: req.user!.sub } });
-      if (dept) where.employee = { departmentId: dept.id };
+      const headedIds = await getHeadedDepartmentIds(req.user!.sub);
+      if (headedIds.length) employeeFilter.departmentId = { in: headedIds };
+      else employeeFilter.departmentId = { in: [] };
     } else if (departmentId) {
-      where.employee = { departmentId };
+      employeeFilter.departmentId = departmentId;
+    }
+    if (search) {
+      const term = search.trim();
+      employeeFilter.OR = [
+        { firstName: { contains: term, mode: 'insensitive' } },
+        { lastName: { contains: term, mode: 'insensitive' } },
+      ];
+    }
+    if (Object.keys(employeeFilter).length > 0) {
+      where.employee = employeeFilter;
     }
 
     const [records, total] = await Promise.all([
       prisma.attendanceRecord.findMany({
         where,
         include: { employee: { select: { firstName: true, lastName: true, employeeNumber: true, department: { select: { name: true } } } } },
-        orderBy: [{ date: 'desc' }, { clockIn: 'desc' }],
+        orderBy: [{ date: 'desc' }, { employee: { lastName: 'asc' } }, { employee: { firstName: 'asc' } }],
         skip,
         take: parseInt(limit),
       }),

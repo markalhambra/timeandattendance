@@ -2,6 +2,7 @@ import nodemailer from 'nodemailer';
 import { prisma } from '../config/database';
 import { NotificationType } from '@prisma/client';
 import { logger } from '../config/logger';
+import { settingsService } from './settings.service';
 
 const SMTP_PORT = parseInt(process.env.SMTP_PORT || '587');
 
@@ -80,7 +81,7 @@ function approvalEmail(typeName: string, status: string, reviewer: string, date:
       <tr><td style="color:#888;font-size:13px;padding:4px 16px 4px 0;">Reviewed by:</td><td style="color:#333;font-size:13px;font-weight:bold;">${reviewer}</td></tr>
       <tr><td style="color:#888;font-size:13px;padding:4px 16px 4px 0;">Date:</td><td style="color:#333;font-size:13px;font-weight:bold;">${date}</td></tr>
     </table>
-    <a href="${APP_URL}" style="display:inline-block;background:#000;color:#fff;padding:13px 28px;border-radius:8px;text-decoration:none;font-size:14px;font-weight:bold;">View in TAMS →</a>`,
+    <a href="${APP_URL}/dashboard" style="display:inline-block;background:#000;color:#fff;padding:13px 28px;border-radius:8px;text-decoration:none;font-size:14px;font-weight:bold;">View in TAMS →</a>`,
   );
 }
 
@@ -211,27 +212,45 @@ export const notificationService = {
       const fullName  = employee ? `${employee.firstName} ${employee.lastName}` : 'An employee';
 
       if (employee?.department?.head) {
-        // If the filer IS the department head, route to HR instead
+        // If the filer IS the department head, route to designated approver or all HR
         if (employee.userId === employee.department.head.id) {
-          await this.notifyHR(
-            type,
-            titles[type] || 'New Request',
-            `${fullName} (Department Head) has submitted a new request.`,
-            data,
-          );
+          const title = titles[type] || 'New Request';
+          const message = `${fullName} (Department Head) has submitted a new request.`;
+          const designatedId = await settingsService.getDeptHeadApproverUserId();
+          let notifiedDesignated = false;
 
-          // Email all active HR users for approval-required types
-          if (typeName) {
-            const hrUsers = await prisma.user.findMany({
-              where: { role: 'HR', isActive: true },
-              select: { email: true },
+          if (designatedId) {
+            const designated = await prisma.user.findUnique({
+              where: { id: designatedId },
+              select: { id: true, email: true, role: true, isActive: true },
             });
-            for (const hr of hrUsers) {
-              await this.sendEmail(
-                hr.email,
-                `${titles[type]} — ${fullName} — ALPAS TAMS`,
-                requestEmail(fullName, typeName, date, `${APP_URL}/hr`),
-              );
+            if (designated?.isActive && ['HR', 'ADMIN'].includes(designated.role)) {
+              await this.createNotification(designated.id, type, title, message, data);
+              if (typeName && designated.email) {
+                await this.sendEmail(
+                  designated.email,
+                  `${title} — ${fullName} — ALPAS TAMS`,
+                  requestEmail(fullName, typeName, date, `${APP_URL}/hr`),
+                );
+              }
+              notifiedDesignated = true;
+            }
+          }
+
+          if (!notifiedDesignated) {
+            await this.notifyHR(type, title, message, data);
+            if (typeName) {
+              const hrUsers = await prisma.user.findMany({
+                where: { role: 'HR', isActive: true },
+                select: { email: true },
+              });
+              for (const hr of hrUsers) {
+                await this.sendEmail(
+                  hr.email,
+                  `${title} — ${fullName} — ALPAS TAMS`,
+                  requestEmail(fullName, typeName, date, `${APP_URL}/hr`),
+                );
+              }
             }
           }
           return;

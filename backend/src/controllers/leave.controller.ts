@@ -4,6 +4,7 @@ import { prisma } from '../config/database';
 import { ApprovalStatus, LeaveType, LeaveDuration } from '@prisma/client';
 import { notificationService } from '../services/notification.service';
 import { phtYear, phtMonth } from '../utils/timezone';
+import { getHeadedDepartmentIds } from '../utils/departmentHead';
 
 const LEAVE_BALANCE_DEFAULTS: Record<LeaveType, number> = {
   SICK: 15,
@@ -229,10 +230,10 @@ export async function getAllLeaves(req: AuthRequest, res: Response): Promise<voi
       if (startDate) where.endDate.gte = new Date(startDate);
     }
     if (req.user!.role === 'DEPARTMENT_HEAD') {
-      const deptId = req.user!.departmentId;
-      if (!deptId) { res.json({ success: true, data: [], meta: { total: 0, page: parseInt(page), limit: parseInt(limit) } }); return; }
+      const headedIds = await getHeadedDepartmentIds(req.user!.sub);
+      if (!headedIds.length) { res.json({ success: true, data: [], meta: { total: 0, page: parseInt(page), limit: parseInt(limit) } }); return; }
       // Exclude the dept head's own leave — those go to HR
-      where.employee = { departmentId: deptId, userId: { not: req.user!.sub } };
+      where.employee = { departmentId: { in: headedIds }, userId: { not: req.user!.sub } };
       if (req.query.reviewed === 'true') {
         // History: leaves already finalized
         delete where.status;
@@ -284,7 +285,7 @@ export async function reviewLeave(req: AuthRequest, res: Response): Promise<void
       return;
     }
 
-    // Dept head: only own department, and only if not yet finalized
+    // Dept head: only headed departments, and only if not yet finalized
     if (role === 'DEPARTMENT_HEAD') {
       if (leave.status !== 'PENDING') {
         res.status(400).json({ success: false, message: 'Leave has already been reviewed.' }); return;
@@ -292,8 +293,8 @@ export async function reviewLeave(req: AuthRequest, res: Response): Promise<void
       if (leave.employee.userId === req.user!.sub) {
         res.status(403).json({ success: false, message: 'You cannot approve your own leave. Please contact HR.' }); return;
       }
-      const deptId = req.user!.departmentId;
-      if (!deptId || leave.employee.departmentId !== deptId) {
+      const headedIds = await getHeadedDepartmentIds(req.user!.sub);
+      if (!leave.employee.departmentId || !headedIds.includes(leave.employee.departmentId)) {
         res.status(403).json({ success: false, message: 'You can only review leaves from your department.' }); return;
       }
     }

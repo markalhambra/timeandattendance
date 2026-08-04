@@ -7,7 +7,7 @@ import toast from 'react-hot-toast';
 
 const EMPTY_FORM = {
   firstName: '', lastName: '', middleName: '', nickname: '', email: '',
-  mobile: '', address: '', designation: '', departmentId: '',
+  employeeNumber: '', mobile: '', address: '', designation: '', departmentId: '',
   dateHired: '', role: 'EMPLOYEE' as Role,
   gender: '', birthday: '', emergencyContact: '', emergencyContactNumber: '',
   sssNumber: '', pagibigNumber: '', philhealthNumber: '', tinNumber: '',
@@ -171,7 +171,8 @@ export default function HREmployees() {
     setSelected(e);
     setForm({
       firstName: e.firstName, lastName: e.lastName, middleName: e.middleName ?? '',
-      nickname: e.nickname ?? '', email: e.email, mobile: e.mobile ?? '', address: e.address ?? '',
+      nickname: e.nickname ?? '', email: e.email, employeeNumber: e.employeeNumber ?? '',
+      mobile: e.mobile ?? '', address: e.address ?? '',
       designation: e.designation ?? '', departmentId: e.departmentId ?? '',
       dateHired: e.dateHired ? e.dateHired.slice(0, 10) : '',
       role: (e.user?.role ?? 'EMPLOYEE') as Role,
@@ -348,6 +349,10 @@ export default function HREmployees() {
                 <input type="email" className="input" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="juan@company.com" />
               </div>
               <div>
+                <label className="label">Employee Number *</label>
+                <input className="input font-mono" value={form.employeeNumber} onChange={(e) => setForm({ ...form, employeeNumber: e.target.value })} placeholder="EMP-0001" />
+              </div>
+              <div>
                 <label className="label">Mobile</label>
                 <input className="input" value={form.mobile} onChange={(e) => setForm({ ...form, mobile: e.target.value })} placeholder="09xxxxxxxxx" />
               </div>
@@ -435,7 +440,7 @@ export default function HREmployees() {
               <button onClick={closeModal} className="btn-secondary flex-1">Cancel</button>
               <button
                 onClick={() => modal === 'add' ? createMutation.mutate(form) : selected && updateMutation.mutate({ id: selected.id, data: form })}
-                disabled={!form.firstName || !form.lastName || !form.designation || !form.departmentId || !form.dateHired || (modal === 'add' && !form.email) || createMutation.isPending || updateMutation.isPending}
+                disabled={!form.firstName || !form.lastName || !form.employeeNumber.trim() || !form.designation || !form.departmentId || !form.dateHired || (modal === 'add' && !form.email) || createMutation.isPending || updateMutation.isPending}
                 className="btn-primary flex-1"
               >
                 {createMutation.isPending || updateMutation.isPending ? 'Saving...' : modal === 'add' ? 'Create Employee' : 'Save Changes'}

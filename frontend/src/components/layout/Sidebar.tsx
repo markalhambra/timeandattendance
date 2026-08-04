@@ -27,6 +27,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Leave Management', path: '/hr/leave-management', icon: '◈', roles: ['HR', 'ADMIN'] },
   { label: 'Departments', path: '/admin/departments', icon: '▣', roles: ['HR', 'ADMIN'] },
   { label: 'Audit Logs', path: '/admin/audit', icon: '▧', roles: ['HR', 'ADMIN'] },
+  { label: 'Settings', path: '/admin/settings', icon: '⚙', roles: ['ADMIN'] },
 ];
 
 interface Props { onClose: () => void; }

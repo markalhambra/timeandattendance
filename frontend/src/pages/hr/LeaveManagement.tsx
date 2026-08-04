@@ -13,8 +13,8 @@ const ADJUSTABLE_LEAVE_TYPES: LeaveType[] = [
 const LEAVE_TYPE_LABELS: Record<string, string> = {
   SICK: 'Sick Leave',
   VACATION: 'Vacation Leave',
-  PML: 'Parental / Maternity Leave (PML)',
-  SML: 'Special Maternity Leave',
+  PML: 'Pamilya Muna Leave (PML)',
+  SML: 'Sarili Muna Leave (SML)',
   EMERGENCY: 'Emergency Leave',
   SOLO_PARENT: 'Solo Parent Leave',
   MATERNITY: 'Maternity Leave',

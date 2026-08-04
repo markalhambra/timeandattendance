@@ -6,6 +6,7 @@ import { signAccessToken, signRefreshToken, verifyRefreshToken } from '../config
 import { AuthRequest } from '../middleware/auth.middleware';
 import { notificationService } from '../services/notification.service';
 import { logger } from '../config/logger';
+import { settingsService } from '../services/settings.service';
 
 export async function login(req: Request, res: Response): Promise<void> {
   const { email, password } = req.body;
@@ -15,43 +16,73 @@ export async function login(req: Request, res: Response): Promise<void> {
       include: { employee: { include: { department: true } } },
     });
 
-    if (!user || !user.isActive) {
+    if (!user) {
       res.status(401).json({ success: false, message: 'Invalid credentials.' });
       return;
     }
 
-    // Check if account is locked
+    const maxAttempts = await settingsService.getMaxFailedLoginAttempts();
+    const lockoutMinutes = await settingsService.getLockoutDurationMinutes();
+
+    // Security lockout is independent of employment isActive — only HR/Admin unlock clears it
+    // (unless admin configured a timed auto-unlock via lockoutDurationMinutes > 0)
     if (user.lockedAt) {
-      res.status(403).json({ success: false, message: 'Account locked due to too many failed login attempts. Please contact HR to unlock your account.' });
+      const elapsedMs = Date.now() - user.lockedAt.getTime();
+      const canAutoUnlock = lockoutMinutes > 0 && elapsedMs >= lockoutMinutes * 60_000;
+      if (canAutoUnlock) {
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { lockedAt: null, failedLoginAttempts: 0 },
+        });
+        user.lockedAt = null;
+        user.failedLoginAttempts = 0;
+      } else {
+        res.status(403).json({
+          success: false,
+          message: 'Account locked due to too many failed login attempts. Please contact HR to unlock your account.',
+        });
+        return;
+      }
+    }
+
+    if (!user.isActive) {
+      res.status(401).json({ success: false, message: 'Invalid credentials.' });
       return;
     }
 
     const valid = await bcrypt.compare(password, user.password);
     if (!valid) {
       const attempts = (user.failedLoginAttempts ?? 0) + 1;
-      const shouldLock = attempts >= 5;
+      const shouldLock = attempts >= maxAttempts;
       await prisma.user.update({
         where: { id: user.id },
         data: {
           failedLoginAttempts: attempts,
-          ...(shouldLock ? { lockedAt: new Date(), isActive: false } : {}),
+          // Do not set isActive:false — lockout must not look like employment deactivation
+          ...(shouldLock ? { lockedAt: new Date(), refreshToken: null } : {}),
         },
       });
       if (shouldLock) {
-        // Notify HR+Admin that an account has been locked
         notificationService.notifyHR(
           'SYSTEM',
           'Account Locked',
-          `${user.email} has been locked after 5 failed login attempts.`,
+          `${user.email} has been locked after ${maxAttempts} failed login attempts.`,
         ).catch(() => {});
-        res.status(403).json({ success: false, message: 'Account locked due to too many failed login attempts. Please contact HR to unlock your account.' });
+        res.status(403).json({
+          success: false,
+          message: 'Account locked due to too many failed login attempts. Please contact HR to unlock your account.',
+        });
       } else {
-        res.status(401).json({ success: false, message: `Invalid credentials. ${5 - attempts} attempt${5 - attempts === 1 ? '' : 's'} remaining before lockout.` });
+        const remaining = maxAttempts - attempts;
+        res.status(401).json({
+          success: false,
+          message: `Invalid credentials. ${remaining} attempt${remaining === 1 ? '' : 's'} remaining before lockout.`,
+        });
       }
       return;
     }
 
-    // Successful login — reset failed attempts
+    // Successful login — reset failed attempts only (lockedAt is never cleared here)
     const payload = {
       sub: user.id,
       role: user.role,
@@ -62,7 +93,6 @@ export async function login(req: Request, res: Response): Promise<void> {
     const accessToken = signAccessToken(payload);
     const refreshToken = signRefreshToken(payload);
 
-    // Store hashed refresh token
     await prisma.user.update({
       where: { id: user.id },
       data: {
@@ -70,11 +100,9 @@ export async function login(req: Request, res: Response): Promise<void> {
         lastLogin: new Date(),
         lastLoginIp: req.ip,
         failedLoginAttempts: 0,
-        lockedAt: null,
       },
     });
 
-    // Audit log
     await prisma.auditLog.create({
       data: {
         userId: user.id,
@@ -124,7 +152,7 @@ export async function refreshToken(req: Request, res: Response): Promise<void> {
     const payload = verifyRefreshToken(refreshToken);
     const user = await prisma.user.findUnique({ where: { id: payload.sub } });
 
-    if (!user || !user.refreshToken || !user.isActive) {
+    if (!user || !user.refreshToken || !user.isActive || user.lockedAt) {
       res.status(401).json({ success: false, message: 'Invalid refresh token.' });
       return;
     }

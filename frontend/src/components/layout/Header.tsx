@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 import { Notification } from '../../types';
@@ -10,8 +10,10 @@ interface Props { onMenuClick: () => void; }
 
 export default function Header({ onMenuClick }: Props) {
   const { user } = useAuth();
+  const qc = useQueryClient();
   const [showNotifs, setShowNotifs] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
+  const [markingAll, setMarkingAll] = useState(false);
 
   const { data: countData } = useQuery({
     queryKey: ['unread-count'],
@@ -20,15 +22,26 @@ export default function Header({ onMenuClick }: Props) {
     refetchIntervalInBackground: false,
   });
 
-  const { data: notifsData, refetch } = useQuery({
+  const { data: notifsData } = useQuery({
     queryKey: ['notifications'],
     queryFn: () => api.get('/notifications?limit=10').then((r) => r.data.data as Notification[]),
     enabled: showNotifs,
   });
 
-  const markAllRead = async () => {
-    await api.patch('/notifications/read-all');
-    refetch();
+  const markAllRead = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (markingAll) return;
+    setMarkingAll(true);
+    try {
+      await api.patch('/notifications/read-all');
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ['notifications'] }),
+        qc.invalidateQueries({ queryKey: ['unread-count'] }),
+      ]);
+    } finally {
+      setMarkingAll(false);
+    }
   };
 
   const now = new Date();
@@ -56,8 +69,8 @@ export default function Header({ onMenuClick }: Props) {
 
       {/* Right */}
       <div className="flex items-center gap-2">
-        {/* Notification bell */}
-        <div className="relative">
+        {/* Notification bell — z-50 so panel sits above click-outside backdrop */}
+        <div className="relative z-50">
           <button
             onClick={() => setShowNotifs(!showNotifs)}
             className="relative p-2 hover:bg-gray-100 rounded-lg transition-colors"
@@ -73,10 +86,21 @@ export default function Header({ onMenuClick }: Props) {
           </button>
 
           {showNotifs && (
-            <div className="absolute right-0 top-full mt-2 w-80 bg-white border border-gray-200 rounded-xl shadow-modal z-50 animate-slide-in">
+            <div
+              className="absolute right-0 top-full mt-2 w-80 bg-white border border-gray-200 rounded-xl shadow-modal z-[60] animate-slide-in"
+              onClick={(e) => e.stopPropagation()}
+              onMouseDown={(e) => e.stopPropagation()}
+            >
               <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
                 <span className="font-semibold text-sm">Notifications</span>
-                <button onClick={markAllRead} className="text-xs text-gray-500 hover:text-black">Mark all read</button>
+                <button
+                  type="button"
+                  onClick={markAllRead}
+                  disabled={markingAll}
+                  className="text-xs text-gray-500 hover:text-black disabled:opacity-50"
+                >
+                  {markingAll ? 'Marking…' : 'Mark all read'}
+                </button>
               </div>
               <div className="max-h-80 overflow-y-auto divide-y divide-gray-50">
                 {!notifsData?.length ? (

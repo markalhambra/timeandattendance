@@ -3,9 +3,11 @@ import { AuthRequest } from '../middleware/auth.middleware';
 import { prisma } from '../config/database';
 import { ApprovalStatus, OvertimeConversionType } from '@prisma/client';
 import { notificationService } from '../services/notification.service';
+import { getHeadedDepartmentIds } from '../utils/departmentHead';
 
 const CTO_MIN_MINUTES = 4 * 60;  // 4 hours
 const CDO_MIN_MINUTES = 8 * 60;  // 8 hours
+const MIN_FILEABLE_OT_MINUTES = 60; // 1 hour minimum to file OT
 
 export async function getMyOvertime(req: AuthRequest, res: Response): Promise<void> {
   const employeeId = req.user!.employeeId;
@@ -21,7 +23,11 @@ export async function getMyOvertime(req: AuthRequest, res: Response): Promise<vo
   try {
     const where: any = {
       employeeId,
-      NOT: [{ isFiled: false, createdAt: { lt: filingDeadline } }],
+      // Hide expired unfiled drafts and unfiled OT under the 1-hour filing minimum
+      NOT: [
+        { isFiled: false, createdAt: { lt: filingDeadline } },
+        { isFiled: false, minutes: { lt: MIN_FILEABLE_OT_MINUTES } },
+      ],
     };
     if (status) where.status = status;
 
@@ -182,6 +188,9 @@ export async function fileOvertimeRequest(req: AuthRequest, res: Response): Prom
     if (record.isFiled) {
       res.status(400).json({ success: false, message: 'Overtime already filed for approval.' }); return;
     }
+    if (record.minutes < MIN_FILEABLE_OT_MINUTES) {
+      res.status(400).json({ success: false, message: 'Overtime must be at least 1 hour to file.' }); return;
+    }
 
     // Check 15-day filing window
     const filingDeadline = new Date(record.createdAt);
@@ -228,10 +237,10 @@ export async function getAllOvertime(req: AuthRequest, res: Response): Promise<v
     // Always filter to formally filed records only — drafts are private to the employee
     where.isFiled = true;
     if (req.user!.role === 'DEPARTMENT_HEAD') {
-      const deptId = req.user!.departmentId;
-      if (!deptId) { res.json({ success: true, data: [], meta: { total: 0 } }); return; }
+      const headedIds = await getHeadedDepartmentIds(req.user!.sub);
+      if (!headedIds.length) { res.json({ success: true, data: [], meta: { total: 0 } }); return; }
       // Exclude the dept head's own overtime — those go to HR
-      where.employee = { departmentId: deptId, userId: { not: req.user!.sub } };
+      where.employee = { departmentId: { in: headedIds }, userId: { not: req.user!.sub } };
     } else if (departmentId) {
       where.employee = { departmentId };
     }
@@ -262,11 +271,11 @@ export async function reviewOvertime(req: AuthRequest, res: Response): Promise<v
   }
 
   try {
-    // Ensure dept head only reviews their own department's overtime, and not their own
+    // Ensure dept head only reviews headed departments' overtime, and not their own
     if (req.user!.role === 'DEPARTMENT_HEAD') {
-      const deptId = req.user!.departmentId;
+      const headedIds = await getHeadedDepartmentIds(req.user!.sub);
       const record = await prisma.overtimeRecord.findUnique({ where: { id }, include: { employee: true } });
-      if (!deptId || !record || record.employee.departmentId !== deptId) {
+      if (!record || !record.employee.departmentId || !headedIds.includes(record.employee.departmentId)) {
         res.status(403).json({ success: false, message: 'You can only review overtime from your department.' }); return;
       }
       if (record.employee.userId === req.user!.sub) {
@@ -332,11 +341,12 @@ export async function getConversions(req: AuthRequest, res: Response): Promise<v
     const where: any = {};
     if (status) where.status = status;
     if (conversionType) where.conversionType = conversionType;
-    // Dept head: scoped to own department; HR/Admin: all employees
+    // Dept head: scoped to headed departments; HR/Admin: all employees
     if (role === 'DEPARTMENT_HEAD') {
-      const deptId = req.user!.departmentId;
+      const headedIds = await getHeadedDepartmentIds(req.user!.sub);
       // Exclude the dept head's own conversions — those go to HR
-      if (deptId) where.employee = { departmentId: deptId, userId: { not: req.user!.sub } };
+      if (headedIds.length) where.employee = { departmentId: { in: headedIds }, userId: { not: req.user!.sub } };
+      else where.employee = { departmentId: { in: [] } };
     } else if (departmentId) {
       where.employee = { departmentId };
     }
@@ -371,10 +381,10 @@ export async function reviewConversion(req: AuthRequest, res: Response): Promise
 
     const role = req.user!.role;
 
-    // Dept head: scoped to own department only, and cannot approve their own
+    // Dept head: scoped to headed departments only, and cannot approve their own
     if (role === 'DEPARTMENT_HEAD') {
-      const deptId = req.user!.departmentId;
-      if (!deptId || existing.employee.departmentId !== deptId) {
+      const headedIds = await getHeadedDepartmentIds(req.user!.sub);
+      if (!existing.employee.departmentId || !headedIds.includes(existing.employee.departmentId)) {
         res.status(403).json({ success: false, message: 'You can only review conversions from your department.' }); return;
       }
       if (existing.employee.userId === req.user!.sub) {

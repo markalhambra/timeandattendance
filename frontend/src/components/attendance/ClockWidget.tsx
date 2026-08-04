@@ -6,9 +6,9 @@ import { GeoLocation, AttendanceRecord, AttendanceStatus } from '../../types';
 import toast from 'react-hot-toast';
 import { format, parseISO } from 'date-fns';
 
-const OFFICE_LAT = parseFloat(import.meta.env.VITE_OFFICE_LAT || '14.583889');
-const OFFICE_LNG = parseFloat(import.meta.env.VITE_OFFICE_LNG || '121.062778');
-const OFFICE_RADIUS = parseFloat(import.meta.env.VITE_OFFICE_RADIUS || '200');
+const FALLBACK_OFFICE_LAT = parseFloat(import.meta.env.VITE_OFFICE_LAT || '14.583889');
+const FALLBACK_OFFICE_LNG = parseFloat(import.meta.env.VITE_OFFICE_LNG || '121.062778');
+const FALLBACK_OFFICE_RADIUS = parseFloat(import.meta.env.VITE_OFFICE_RADIUS || '200');
 
 function haversine(lat1: number, lng1: number, lat2: number, lng2: number) {
   const R = 6371000;
@@ -54,6 +54,17 @@ export default function ClockWidget() {
     refetchIntervalInBackground: false,
   });
 
+  const { data: officeSettings } = useQuery<{ lat: number; lng: number; radiusMeters: number }>({
+    queryKey: ['office-settings'],
+    queryFn: () => api.get('/settings/office').then((r) => r.data.data),
+    staleTime: 60_000,
+    retry: 1,
+  });
+
+  const officeLat = officeSettings?.lat ?? FALLBACK_OFFICE_LAT;
+  const officeLng = officeSettings?.lng ?? FALLBACK_OFFICE_LNG;
+  const officeRadius = officeSettings?.radiusMeters ?? FALLBACK_OFFICE_RADIUS;
+
   const today = todayData?.data ?? null;
   const missedClockOut = todayData?.missedClockOut ?? null;
   const navigate = useNavigate();
@@ -66,13 +77,13 @@ export default function ClockWidget() {
       (pos) => {
         const loc = { latitude: pos.coords.latitude, longitude: pos.coords.longitude, accuracy: pos.coords.accuracy };
         setGeo(loc);
-        setDistance(Math.round(haversine(loc.latitude, loc.longitude, OFFICE_LAT, OFFICE_LNG)));
+        setDistance(Math.round(haversine(loc.latitude, loc.longitude, officeLat, officeLng)));
         setGeoLoading(false);
       },
       () => { setGeoLoading(false); },
       { enableHighAccuracy: true, timeout: 15000 },
     );
-  }, []);
+  }, [officeLat, officeLng]);
 
   const getLocation = useCallback((): Promise<GeoLocation> => {
     setGeoLoading(true);
@@ -83,7 +94,7 @@ export default function ClockWidget() {
         (pos) => {
           const loc = { latitude: pos.coords.latitude, longitude: pos.coords.longitude, accuracy: pos.coords.accuracy };
           setGeo(loc);
-          const dist = haversine(loc.latitude, loc.longitude, OFFICE_LAT, OFFICE_LNG);
+          const dist = haversine(loc.latitude, loc.longitude, officeLat, officeLng);
           setDistance(Math.round(dist));
           setGeoLoading(false);
           resolve(loc);
@@ -96,7 +107,7 @@ export default function ClockWidget() {
         { enableHighAccuracy: true, timeout: 15000 },
       );
     });
-  }, []);
+  }, [officeLat, officeLng]);
 
   const clockInMutation = useMutation({
     mutationFn: async (status?: AttendanceStatus) => {
@@ -125,8 +136,8 @@ export default function ClockWidget() {
   const handleClock = async () => {
     try {
       const loc = await getLocation();
-      const dist = haversine(loc.latitude, loc.longitude, OFFICE_LAT, OFFICE_LNG);
-      const isOnsite = dist <= OFFICE_RADIUS;
+      const dist = haversine(loc.latitude, loc.longitude, officeLat, officeLng);
+      const isOnsite = dist <= officeRadius;
 
       if (today?.clockIn) {
         clockOutMutation.mutate();
@@ -208,10 +219,10 @@ export default function ClockWidget() {
 
         {/* GPS info */}
         {distance !== null && (
-          <div className={`flex items-center gap-2 mb-4 text-xs px-3 py-2 rounded-lg ${distance <= OFFICE_RADIUS ? 'bg-green-50 text-green-700' : 'bg-yellow-50 text-yellow-700'}`}>
+          <div className={`flex items-center gap-2 mb-4 text-xs px-3 py-2 rounded-lg ${distance <= officeRadius ? 'bg-green-50 text-green-700' : 'bg-yellow-50 text-yellow-700'}`}>
             <span>📍</span>
             <span>
-              {distance <= OFFICE_RADIUS ? `${distance}m from office — ON-SITE` : `${distance}m from office — Outside radius`}
+              {distance <= officeRadius ? `${distance}m from office — ON-SITE` : `${distance}m from office — Outside radius`}
             </span>
           </div>
         )}

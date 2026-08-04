@@ -21,6 +21,7 @@ import { notificationRoutes } from './routes/notification.routes';
 import { dashboardRoutes } from './routes/dashboard.routes';
 import { auditRoutes } from './routes/audit.routes';
 import { cronRoutes } from './routes/cron.routes';
+import { settingsRoutes } from './routes/settings.routes';
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -97,6 +98,7 @@ app.use('/api/reports', reportRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/audit-logs', auditRoutes);
+app.use('/api/settings', settingsRoutes);
 app.use('/api/cron', cronRoutes);
 
 // ─── 404 Handler ──────────────────────────────────────────────────────────

@@ -59,7 +59,7 @@ export async function deleteDepartment(req: AuthRequest, res: Response): Promise
     }
     // Null out departmentId for any inactive employees still referencing this department
     await prisma.employee.updateMany({ where: { departmentId: req.params.id }, data: { departmentId: null } });
-    // Clear headId to remove the unique FK before deletion
+    // Clear headId before deletion
     await prisma.department.update({ where: { id: req.params.id }, data: { headId: null } });
     await prisma.department.delete({ where: { id: req.params.id } });
     res.json({ success: true, message: 'Department deleted.' });

@@ -27,6 +27,7 @@ const AdminDashboard = lazy(() => import('./pages/admin/Dashboard'));
 const AdminEmployeesPage = lazy(() => import('./pages/admin/Employees'));
 const AdminDepartmentsPage = lazy(() => import('./pages/admin/Departments'));
 const AuditLogsPage = lazy(() => import('./pages/admin/AuditLogs'));
+const AdminSettingsPage = lazy(() => import('./pages/admin/Settings'));
 const NotFoundPage = lazy(() => import('./pages/NotFound'));
 
 function PageLoader() {
@@ -94,6 +95,7 @@ export default function App() {
           <Route path="/admin/employees" element={<RequireAuth><Navigate to="/hr/employees" replace /></RequireAuth>} />
           <Route path="/admin/departments" element={<RequireAuth roles={['HR', 'ADMIN']}><Layout><AdminDepartmentsPage /></Layout></RequireAuth>} />
           <Route path="/admin/audit" element={<RequireAuth roles={['HR', 'ADMIN']}><Layout><AuditLogsPage /></Layout></RequireAuth>} />
+          <Route path="/admin/settings" element={<RequireAuth roles={['ADMIN']}><Layout><AdminSettingsPage /></Layout></RequireAuth>} />
 
           <Route path="*" element={<NotFoundPage />} />
         </Routes>

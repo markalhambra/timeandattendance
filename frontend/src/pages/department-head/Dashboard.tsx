@@ -5,7 +5,8 @@ import { format } from 'date-fns';
 import { Link } from 'react-router-dom';
 
 interface DeptDashboardData {
-  department: { id: string; name: string };
+  department: { id: string; name: string } | null;
+  departments?: { id: string; name: string }[];
   todayStats: { total: number; present: number; absent: number; onsite: number; wfh: number; ob: number };
   todayRecords: (AttendanceRecord & { employee: { firstName: string; lastName: string; employeeNumber: string } })[];
   pendingLeaves: number;
@@ -38,7 +39,11 @@ export default function DeptHeadDashboard() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-black">{data?.department?.name}</h1>
+        <h1 className="text-2xl font-black">
+          {data?.departments?.length
+            ? data.departments.map((d) => d.name).join(', ')
+            : data?.department?.name || 'Department'}
+        </h1>
         <p className="text-sm text-gray-500 mt-0.5">{today}</p>
       </div>
 

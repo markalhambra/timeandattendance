@@ -3,6 +3,7 @@ import { AuthRequest } from '../middleware/auth.middleware';
 import { prisma } from '../config/database';
 import { phtToday, phtYear, phtMonth, phtMonthBounds } from '../utils/timezone';
 import { logger } from '../config/logger';
+import { getHeadedDepartments } from '../utils/departmentHead';
 
 const LEAVE_BALANCE_DEFAULTS = {
   SICK: 15,
@@ -104,18 +105,30 @@ export async function employeeDashboard(req: AuthRequest, res: Response): Promis
 
 export async function deptHeadDashboard(req: AuthRequest, res: Response): Promise<void> {
   try {
-    const deptId = req.user!.departmentId;
-    if (!deptId) {
-      res.json({ success: true, data: { department: null, totalEmployees: 0, todayStats: { total: 0, present: 0, absent: 0, onsite: 0, wfh: 0, ob: 0 }, todayRecords: [], pendingLeaves: 0, pendingOvertimes: 0, pendingCorrections: 0 } });
+    const headed = await getHeadedDepartments(req.user!.sub);
+    const headedIds = headed.map((d) => d.id);
+    if (!headedIds.length) {
+      res.json({
+        success: true,
+        data: {
+          department: null,
+          departments: [],
+          totalEmployees: 0,
+          todayStats: { total: 0, present: 0, absent: 0, onsite: 0, wfh: 0, ob: 0 },
+          todayRecords: [],
+          pendingLeaves: 0,
+          pendingOvertimes: 0,
+          pendingCorrections: 0,
+        },
+      });
       return;
     }
 
     const today = phtToday();
 
-    const where = { departmentId: deptId, isActive: true, isArchived: false };
+    const where = { departmentId: { in: headedIds }, isActive: true, isArchived: false };
 
-    const [dept, employees, todayAttendance, pendingLeaves, pendingOvertime, pendingCorrections] = await Promise.all([
-      prisma.department.findUnique({ where: { id: deptId } }),
+    const [employees, todayAttendance, pendingLeaves, pendingOvertime, pendingCorrections] = await Promise.all([
       prisma.employee.count({ where }),
       prisma.attendanceRecord.findMany({
         where: { date: today, employee: where },
@@ -126,10 +139,17 @@ export async function deptHeadDashboard(req: AuthRequest, res: Response): Promis
       prisma.attendanceCorrection.count({ where: { status: 'PENDING', employee: where } }),
     ]);
 
+    const primary = headed[0];
+    const departmentLabel =
+      headed.length === 1
+        ? primary
+        : { id: primary.id, name: headed.map((d) => d.name).join(', ') };
+
     res.json({
       success: true,
       data: {
-        department: dept,
+        department: departmentLabel,
+        departments: headed,
         totalEmployees: employees,
         todayStats: {
           total: todayAttendance.length,

@@ -107,10 +107,11 @@ model Department {
   updatedAt   DateTime @updatedAt
 
   employees   Employee[]
-  headId      String?   @unique
+  headId      String?
   head        User?     @relation("DepartmentHead", fields: [headId], references: [id])
 
   @@index([isActive])
+  @@index([headId])
   @@map("departments")
 }
 
@@ -135,7 +136,7 @@ model User {
   updatedAt             DateTime  @updatedAt
 
   employee              Employee?
-  departmentHead        Department? @relation("DepartmentHead")
+  headedDepartments     Department[] @relation("DepartmentHead")
   auditLogs             AuditLog[]
   notifications         Notification[] @relation("NotificationRecipient")
   sentNotifications     Notification[] @relation("NotificationSender")
@@ -459,4 +460,18 @@ model Holiday {
   createdAt   DateTime @default(now())
 
   @@map("holidays")
+}
+
+// ─────────────────────────────────────────────
+// SYSTEM SETTINGS (admin-editable key/value)
+// ─────────────────────────────────────────────
+
+model SystemSetting {
+  key       String   @id
+  value     String
+  updatedBy String?
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+
+  @@map("system_settings")
 }

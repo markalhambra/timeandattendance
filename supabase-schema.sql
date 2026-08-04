@@ -267,6 +267,17 @@ CREATE TABLE "holidays" (
     CONSTRAINT "holidays_pkey" PRIMARY KEY ("id")
 );
 
+-- CreateTable
+CREATE TABLE "system_settings" (
+    "key" TEXT NOT NULL,
+    "value" TEXT NOT NULL,
+    "updatedBy" TEXT,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "system_settings_pkey" PRIMARY KEY ("key")
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "departments_name_key" ON "departments"("name");
 
@@ -274,7 +285,7 @@ CREATE UNIQUE INDEX "departments_name_key" ON "departments"("name");
 CREATE UNIQUE INDEX "departments_code_key" ON "departments"("code");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "departments_headId_key" ON "departments"("headId");
+CREATE INDEX "departments_headId_idx" ON "departments"("headId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "users_email_key" ON "users"("email");

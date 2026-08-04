@@ -17,14 +17,19 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
     const token = authHeader.split(' ')[1];
     const payload = verifyAccessToken(token);
 
-    // Verify user still exists and is active
+    // Verify user still exists, is active, and is not locked out
     const user = await prisma.user.findUnique({
       where: { id: payload.sub },
-      select: { id: true, isActive: true, role: true },
+      select: { id: true, isActive: true, role: true, lockedAt: true },
     });
 
-    if (!user || !user.isActive) {
-      res.status(401).json({ success: false, message: 'Account inactive or not found.' });
+    if (!user || !user.isActive || user.lockedAt) {
+      res.status(401).json({
+        success: false,
+        message: user?.lockedAt
+          ? 'Account locked due to too many failed login attempts. Please contact HR to unlock your account.'
+          : 'Account inactive or not found.',
+      });
       return;
     }
 
