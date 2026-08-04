@@ -110,9 +110,9 @@ See `.env.example` for all required variables. Key ones:
 ```env
 DATABASE_URL=postgresql://user:pass@localhost:5432/tams
 JWT_ACCESS_SECRET=your-secret
-OFFICE_LAT=14.5995
-OFFICE_LNG=120.9842
-OFFICE_RADIUS_METERS=200
+OFFICE_LAT=14.583889
+OFFICE_LNG=121.062778
+OFFICE_RADIUS_METERS=300
 FRONTEND_URL=http://localhost:3000
 ```
 

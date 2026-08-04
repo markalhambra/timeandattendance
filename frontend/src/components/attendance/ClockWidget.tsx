@@ -6,9 +6,9 @@ import { GeoLocation, AttendanceRecord, AttendanceStatus } from '../../types';
 import toast from 'react-hot-toast';
 import { format, parseISO } from 'date-fns';
 
-const FALLBACK_OFFICE_LAT = parseFloat(import.meta.env.VITE_OFFICE_LAT || '14.5995');
-const FALLBACK_OFFICE_LNG = parseFloat(import.meta.env.VITE_OFFICE_LNG || '120.9842');
-const FALLBACK_OFFICE_RADIUS = parseFloat(import.meta.env.VITE_OFFICE_RADIUS || '200');
+const FALLBACK_OFFICE_LAT = parseFloat(import.meta.env.VITE_OFFICE_LAT || '14.583889');
+const FALLBACK_OFFICE_LNG = parseFloat(import.meta.env.VITE_OFFICE_LNG || '121.062778');
+const FALLBACK_OFFICE_RADIUS = parseFloat(import.meta.env.VITE_OFFICE_RADIUS || '300');
 
 function haversine(lat1: number, lng1: number, lat2: number, lng2: number) {
   const R = 6371000;

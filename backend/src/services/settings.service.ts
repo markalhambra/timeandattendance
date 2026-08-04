@@ -14,9 +14,9 @@ export const SETTING_KEYS = {
 export type SettingKey = (typeof SETTING_KEYS)[keyof typeof SETTING_KEYS];
 
 const DEFAULTS: Record<SettingKey, string> = {
-  [SETTING_KEYS.OFFICE_LAT]: process.env.OFFICE_LAT || '14.5995',
-  [SETTING_KEYS.OFFICE_LNG]: process.env.OFFICE_LNG || '120.9842',
-  [SETTING_KEYS.OFFICE_RADIUS]: process.env.OFFICE_RADIUS_METERS || '200',
+  [SETTING_KEYS.OFFICE_LAT]: process.env.OFFICE_LAT || '14.583889',
+  [SETTING_KEYS.OFFICE_LNG]: process.env.OFFICE_LNG || '121.062778',
+  [SETTING_KEYS.OFFICE_RADIUS]: process.env.OFFICE_RADIUS_METERS || '300',
   [SETTING_KEYS.OT_THRESHOLD_HOURS]: '9',
   [SETTING_KEYS.MAX_FAILED_LOGINS]: '5',
   [SETTING_KEYS.LOCKOUT_DURATION_MINUTES]: '0',
@@ -110,9 +110,9 @@ export const settingsService = {
   async getOfficeSettings(): Promise<{ lat: number; lng: number; radiusMeters: number }> {
     const map = await loadCache();
     return {
-      lat: parseNum(map.get(SETTING_KEYS.OFFICE_LAT), parseNum(DEFAULTS[SETTING_KEYS.OFFICE_LAT], 14.5995)),
-      lng: parseNum(map.get(SETTING_KEYS.OFFICE_LNG), parseNum(DEFAULTS[SETTING_KEYS.OFFICE_LNG], 120.9842)),
-      radiusMeters: parseNum(map.get(SETTING_KEYS.OFFICE_RADIUS), parseNum(DEFAULTS[SETTING_KEYS.OFFICE_RADIUS], 200)),
+      lat: parseNum(map.get(SETTING_KEYS.OFFICE_LAT), parseNum(DEFAULTS[SETTING_KEYS.OFFICE_LAT], 14.583889)),
+      lng: parseNum(map.get(SETTING_KEYS.OFFICE_LNG), parseNum(DEFAULTS[SETTING_KEYS.OFFICE_LNG], 121.062778)),
+      radiusMeters: parseNum(map.get(SETTING_KEYS.OFFICE_RADIUS), parseNum(DEFAULTS[SETTING_KEYS.OFFICE_RADIUS], 300)),
     };
   },
 
