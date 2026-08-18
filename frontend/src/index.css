@@ -14,6 +14,13 @@
   ::-webkit-scrollbar-thumb:hover { @apply bg-gray-600; }
 }
 
+@layer utilities {
+  /* push content below iOS notch / Dynamic Island */
+  .pt-safe-top {
+    padding-top: env(safe-area-inset-top);
+  }
+}
+
 @layer components {
   .card {
     @apply bg-white border border-gray-200 rounded-xl shadow-card;

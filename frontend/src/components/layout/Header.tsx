@@ -49,7 +49,7 @@ export default function Header({ onMenuClick }: Props) {
   const phDate = now.toLocaleDateString('en-PH', { timeZone: 'Asia/Manila', weekday: 'long', month: 'long', day: 'numeric' });
 
   return (
-    <header className="bg-white border-b border-gray-200 px-4 md:px-6 py-3 flex items-center justify-between sticky top-0 z-10">
+    <header className="bg-white border-b border-gray-200 px-4 md:px-6 pb-3 pt-safe-top flex items-center justify-between sticky top-0 z-10">
       {/* Left */}
       <div className="flex items-center gap-3">
         <button
