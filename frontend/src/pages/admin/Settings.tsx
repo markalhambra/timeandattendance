@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
@@ -75,6 +75,86 @@ export default function AdminSettings() {
 
   const setField = (key: keyof FormState, value: string) => {
     setForm((prev) => (prev ? { ...prev, [key]: value } : prev));
+  };
+
+  const [previewData, setPreviewData] = useState<{ count: number; cutoffDate: string } | null>(null);
+  const [previewing, setPreviewing] = useState(false);
+  const [archiving, setArchiving] = useState(false);
+  const [backingUp, setBackingUp] = useState(false);
+  const [restoring, setRestoring] = useState(false);
+  const [restoreResult, setRestoreResult] = useState<string | null>(null);
+  const restoreFileRef = useRef<HTMLInputElement>(null);
+
+  const handlePreview = async () => {
+    try {
+      setPreviewing(true);
+      const r = await api.get('/settings/archive-attendance/preview');
+      setPreviewData(r.data.data);
+    } catch {
+      toast.error('Failed to get archive preview.');
+    } finally {
+      setPreviewing(false);
+    }
+  };
+
+  const handleArchive = async () => {
+    if (!previewData?.count) return;
+    try {
+      setArchiving(true);
+      const resp = await api.post('/settings/archive-attendance', {}, { responseType: 'blob' });
+      const url = URL.createObjectURL(resp.data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `attendance_archive_before_${previewData.cutoffDate}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+      setPreviewData(null);
+      toast.success('Archive downloaded and old records deleted.');
+    } catch (err: any) {
+      const text = await err?.response?.data?.text?.();
+      let msg = 'Archive failed.';
+      try { msg = JSON.parse(text)?.message || msg; } catch { /* use default */ }
+      toast.error(msg);
+    } finally {
+      setArchiving(false);
+    }
+  };
+
+  const handleBackup = async () => {
+    try {
+      setBackingUp(true);
+      const resp = await api.get('/settings/backup', { responseType: 'blob' });
+      const today = new Date().toISOString().split('T')[0];
+      const url = URL.createObjectURL(resp.data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `tams_backup_${today}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.error('Backup failed.');
+    } finally {
+      setBackingUp(false);
+    }
+  };
+
+  const handleRestore = async () => {
+    const file = restoreFileRef.current?.files?.[0];
+    if (!file) { toast.error('Please select an XLSX file.'); return; }
+    try {
+      setRestoring(true);
+      setRestoreResult(null);
+      const fd = new FormData();
+      fd.append('file', file);
+      const r = await api.post('/settings/restore-attendance', fd);
+      setRestoreResult(r.data.data.message);
+      toast.success('Restore complete.');
+      if (restoreFileRef.current) restoreFileRef.current.value = '';
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Restore failed.');
+    } finally {
+      setRestoring(false);
+    }
   };
 
   const handleSave = () => {
@@ -256,6 +336,77 @@ export default function AdminSettings() {
           {saveMutation.isPending ? 'Saving…' : 'Save changes'}
         </button>
       </div>
+
+      {/* Database Management */}
+      <section className="card p-5 space-y-4">
+        <div>
+          <h2 className="font-bold text-sm">Database Management</h2>
+          <p className="text-xs text-gray-500 mt-0.5">Archive old records to free up Supabase storage. Only administrators can perform these actions.</p>
+        </div>
+
+        {/* Archive & Purge */}
+        <div className="border border-gray-100 rounded-xl p-4 space-y-3">
+          <div>
+            <h3 className="font-semibold text-sm">Archive & Purge Attendance</h3>
+            <p className="text-xs text-gray-400 mt-0.5">Download all attendance records older than 6 months as XLSX, then permanently delete them from the database.</p>
+          </div>
+          <div className="flex items-center gap-3 flex-wrap">
+            <button onClick={handlePreview} disabled={previewing} className="btn-secondary text-sm">
+              {previewing ? 'Checking…' : 'Preview'}
+            </button>
+            {previewData && (
+              <span className="text-sm text-gray-600">
+                {previewData.count > 0
+                  ? `${previewData.count} record${previewData.count !== 1 ? 's' : ''} before ${previewData.cutoffDate}`
+                  : 'No records older than 6 months.'}
+              </span>
+            )}
+            {previewData && previewData.count > 0 && (
+              <button
+                onClick={handleArchive}
+                disabled={archiving}
+                className="px-4 py-2 rounded-lg text-sm font-semibold bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
+              >
+                {archiving ? 'Archiving…' : `Archive & Delete ${previewData.count} records`}
+              </button>
+            )}
+          </div>
+          {previewData && previewData.count > 0 && (
+            <p className="text-[11px] text-red-500">⚠ This permanently deletes the records shown above. The XLSX will download automatically.</p>
+          )}
+        </div>
+
+        {/* Full Backup */}
+        <div className="border border-gray-100 rounded-xl p-4 space-y-3">
+          <div>
+            <h3 className="font-semibold text-sm">Full Data Backup</h3>
+            <p className="text-xs text-gray-400 mt-0.5">Export all employees, attendance, leave, and overtime records as a multi-sheet XLSX.</p>
+          </div>
+          <button onClick={handleBackup} disabled={backingUp} className="btn-secondary text-sm disabled:opacity-50">
+            {backingUp ? 'Preparing…' : 'Download Backup XLSX'}
+          </button>
+        </div>
+
+        {/* Restore */}
+        <div className="border border-gray-100 rounded-xl p-4 space-y-3">
+          <div>
+            <h3 className="font-semibold text-sm">Restore Attendance from Archive</h3>
+            <p className="text-xs text-gray-400 mt-0.5">Upload a previously downloaded archive XLSX to re-import attendance records. Safe to run multiple times — upserts by employee + date.</p>
+          </div>
+          <div className="flex items-center gap-3 flex-wrap">
+            <input
+              ref={restoreFileRef}
+              type="file"
+              accept=".xlsx"
+              className="text-sm file:mr-3 file:py-1 file:px-3 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-gray-100 file:text-gray-700 hover:file:bg-gray-200"
+            />
+            <button onClick={handleRestore} disabled={restoring} className="btn-secondary text-sm disabled:opacity-50">
+              {restoring ? 'Restoring…' : 'Restore'}
+            </button>
+          </div>
+          {restoreResult && <p className="text-xs text-green-600">{restoreResult}</p>}
+        </div>
+      </section>
     </div>
   );
 }
