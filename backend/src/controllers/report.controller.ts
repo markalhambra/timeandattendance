@@ -63,28 +63,43 @@ export async function attendanceReport(req: AuthRequest, res: Response): Promise
     }
     const chartData = Array.from(byDate.entries()).map(([date, v]) => ({ date, ...v }));
 
-    // summary: by department
-    const byDept = new Map<string, { dept: string; present: number; onsite: number; wfh: number; ob: number; totalWorkMins: number; totalOTMins: number }>();
-    for (const r of records) {
-      const dept = r.employee.department?.name ?? 'Unknown';
-      if (!byDept.has(dept)) byDept.set(dept, { dept, present: 0, onsite: 0, wfh: 0, ob: 0, totalWorkMins: 0, totalOTMins: 0 });
-      const e = byDept.get(dept)!;
-      e.present++;
-      if (r.status === 'ON_SITE') e.onsite++;
-      else if (r.status === 'WFH') e.wfh++;
-      else if (r.status === 'OB') e.ob++;
-      e.totalWorkMins += r.workingMinutes || 0;
-      e.totalOTMins += r.overtimeMinutes || 0;
+    // summary: per-record when filtered by employee, otherwise department rollup
+    let summary: object[];
+    if (employeeId) {
+      summary = records.map((r) => ({
+        Date: r.date.toISOString().split('T')[0],
+        Employee: `${r.employee.firstName} ${r.employee.lastName}`,
+        'Emp No.': r.employee.employeeNumber,
+        Department: r.employee.department?.name ?? '—',
+        Status: r.status,
+        'Clock In': r.clockIn?.toLocaleTimeString('en-PH') || '—',
+        'Clock Out': r.clockOut?.toLocaleTimeString('en-PH') || '—',
+        'Work Hours': r.workingMinutes ? (r.workingMinutes / 60).toFixed(2) : '0',
+        'OT Hours': r.overtimeMinutes ? (r.overtimeMinutes / 60).toFixed(2) : '0',
+      }));
+    } else {
+      const byDept = new Map<string, { dept: string; present: number; onsite: number; wfh: number; ob: number; totalWorkMins: number; totalOTMins: number }>();
+      for (const r of records) {
+        const dept = r.employee.department?.name ?? 'Unknown';
+        if (!byDept.has(dept)) byDept.set(dept, { dept, present: 0, onsite: 0, wfh: 0, ob: 0, totalWorkMins: 0, totalOTMins: 0 });
+        const e = byDept.get(dept)!;
+        e.present++;
+        if (r.status === 'ON_SITE') e.onsite++;
+        else if (r.status === 'WFH') e.wfh++;
+        else if (r.status === 'OB') e.ob++;
+        e.totalWorkMins += r.workingMinutes || 0;
+        e.totalOTMins += r.overtimeMinutes || 0;
+      }
+      summary = Array.from(byDept.values()).map((e) => ({
+        Department: e.dept,
+        'Records': e.present,
+        'On-Site': e.onsite,
+        WFH: e.wfh,
+        OB: e.ob,
+        'Total Work Hours': (e.totalWorkMins / 60).toFixed(1),
+        'Total OT Hours': (e.totalOTMins / 60).toFixed(1),
+      }));
     }
-    const summary = Array.from(byDept.values()).map((e) => ({
-      Department: e.dept,
-      'Records': e.present,
-      'On-Site': e.onsite,
-      WFH: e.wfh,
-      OB: e.ob,
-      'Total Work Hours': (e.totalWorkMins / 60).toFixed(1),
-      'Total OT Hours': (e.totalOTMins / 60).toFixed(1),
-    }));
 
     res.json({ success: true, data: { chartData, summary, records } });
   } catch {
