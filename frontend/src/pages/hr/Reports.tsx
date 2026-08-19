@@ -6,17 +6,18 @@ import { format } from 'date-fns';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
 import * as XLSX from 'xlsx';
 
-type ReportType = 'attendance' | 'leave' | 'overtime' | 'absence';
+type ReportType = 'attendance' | 'leave' | 'overtime' | 'absence' | 'ot-credits';
 
 interface ReportChartProps { reportData: any; reportType: ReportType; startDate: string; endDate: string; }
 
 const ReportChart = memo(function ReportChart({ reportData, reportType, startDate, endDate }: ReportChartProps) {
   if (!reportData || !Array.isArray(reportData.chartData)) return null;
+  const title = reportType === 'ot-credits'
+    ? 'Available OT Credits by Department (hours)'
+    : `${reportType.charAt(0).toUpperCase() + reportType.slice(1)} Summary — ${startDate} to ${endDate}`;
   return (
     <div className="card p-6">
-      <h2 className="font-semibold text-sm mb-4">
-        {reportType.charAt(0).toUpperCase() + reportType.slice(1)} Summary — {startDate} to {endDate}
-      </h2>
+      <h2 className="font-semibold text-sm mb-4">{title}</h2>
       <ResponsiveContainer width="100%" height={240}>
         {reportType === 'attendance' ? (
           <BarChart data={reportData.chartData}>
@@ -27,6 +28,14 @@ const ReportChart = memo(function ReportChart({ reportData, reportType, startDat
             <Bar dataKey="onsite" name="On-Site" fill="#000" />
             <Bar dataKey="wfh" name="WFH" fill="#6b7280" />
             <Bar dataKey="ob" name="OB" fill="#9ca3af" />
+          </BarChart>
+        ) : reportType === 'ot-credits' ? (
+          <BarChart data={reportData.chartData} layout="vertical">
+            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+            <XAxis type="number" tick={{ fontSize: 11 }} unit="h" />
+            <YAxis type="category" dataKey="date" tick={{ fontSize: 11 }} width={120} />
+            <Tooltip formatter={(v: number) => [`${v}h`, 'OT Hours']} />
+            <Bar dataKey="count" name="OT Hours" fill="#000" />
           </BarChart>
         ) : (
           <LineChart data={reportData.chartData}>
@@ -62,6 +71,14 @@ export default function ReportsPage() {
   const { data: reportData, isLoading } = useQuery({
     queryKey: ['report', reportType, startDate, endDate, deptFilter, employeeFilter, workTypeFilter],
     queryFn: () => {
+      if (reportType === 'ot-credits') {
+        let url = '/reports/ot-credits';
+        const params = new URLSearchParams();
+        if (employeeFilter) params.set('employeeId', employeeFilter);
+        else if (deptFilter) params.set('departmentId', deptFilter);
+        if (params.toString()) url += `?${params.toString()}`;
+        return api.get(url).then((r) => r.data.data);
+      }
       let url = `/reports/${reportType}?startDate=${startDate}&endDate=${endDate}`;
       if (employeeFilter) url += `&employeeId=${employeeFilter}`;
       else if (deptFilter) url += `&departmentId=${deptFilter}`;
@@ -75,6 +92,7 @@ export default function ReportsPage() {
     { key: 'leave', label: 'Leave' },
     { key: 'overtime', label: 'Overtime' },
     { key: 'absence', label: 'Absences' },
+    { key: 'ot-credits', label: 'OT Credits' },
   ];
 
   const handleExport = async () => {
@@ -99,8 +117,12 @@ export default function ReportsPage() {
         if (!reportData?.summary?.length) return;
         const wb = XLSX.utils.book_new();
         const ws = XLSX.utils.json_to_sheet(reportData.summary);
-        XLSX.utils.book_append_sheet(wb, ws, reportType.charAt(0).toUpperCase() + reportType.slice(1));
-        XLSX.writeFile(wb, `${reportType}_${startDate}_to_${endDate}.xlsx`);
+        const sheetName = reportType === 'ot-credits' ? 'OT Credits' : reportType.charAt(0).toUpperCase() + reportType.slice(1);
+        XLSX.utils.book_append_sheet(wb, ws, sheetName);
+        const fileName = reportType === 'ot-credits'
+          ? `ot_credits_${format(new Date(), 'yyyy-MM-dd')}.xlsx`
+          : `${reportType}_${startDate}_to_${endDate}.xlsx`;
+        XLSX.writeFile(wb, fileName);
       }
     } finally {
       setExporting(false);
@@ -115,7 +137,7 @@ export default function ReportsPage() {
           <p className="text-sm text-gray-500 mt-0.5">Analytics and downloadable reports</p>
         </div>
         <button onClick={handleExport} disabled={exporting || !reportData?.summary?.length} className="btn-primary disabled:opacity-50">
-          {exporting ? 'Exporting…' : `Export ${reportType.charAt(0).toUpperCase() + reportType.slice(1)} XLSX`}
+          {exporting ? 'Exporting…' : reportType === 'ot-credits' ? 'Export OT Credits XLSX' : `Export ${reportType.charAt(0).toUpperCase() + reportType.slice(1)} XLSX`}
         </button>
       </div>
 
@@ -128,12 +150,14 @@ export default function ReportsPage() {
             </button>
           ))}
         </div>
+        {reportType !== 'ot-credits' && (
         <div className="flex items-center gap-2">
           <label className="text-xs text-gray-500 font-medium">From</label>
           <input type="date" value={startDate} max={endDate} onChange={(e) => setStartDate(e.target.value)} className="input w-auto text-sm" />
           <label className="text-xs text-gray-500 font-medium">To</label>
           <input type="date" value={endDate} min={startDate} onChange={(e) => setEndDate(e.target.value)} className="input w-auto text-sm" />
         </div>
+        )}
         <select value={deptFilter} onChange={(e) => { setDeptFilter(e.target.value); setEmployeeFilter(''); }} className="input w-auto text-sm">
           <option value="">All Departments</option>
           {depts?.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
@@ -163,7 +187,7 @@ export default function ReportsPage() {
       {reportData?.summary && (
         <div className="card overflow-hidden">
           <div className="px-5 py-4 border-b border-gray-100">
-            <h2 className="font-semibold text-sm">Summary by Department</h2>
+            <h2 className="font-semibold text-sm">{reportType === 'ot-credits' ? 'Available OT Credits by Employee' : 'Summary by Department'}</h2>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full">

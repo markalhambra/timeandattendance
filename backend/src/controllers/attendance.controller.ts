@@ -160,8 +160,10 @@ export async function clockOut(req: AuthRequest, res: Response): Promise<void> {
 
     const now = new Date();
     const workingMinutes = Math.floor((now.getTime() - record.clockIn.getTime()) / 60000);
-    const otThresholdMinutes = await settingsService.getOtThresholdMinutes();
-    const overtimeMinutes = Math.max(0, workingMinutes - otThresholdMinutes);
+    const dayOfWeek = record.date.getUTCDay(); // 0 = Sunday, 6 = Saturday
+    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+    const otThresholdMinutes = isWeekend ? 0 : await settingsService.getOtThresholdMinutes();
+    const overtimeMinutes = isWeekend ? workingMinutes : Math.max(0, workingMinutes - otThresholdMinutes);
 
     const updated = await prisma.attendanceRecord.update({
       where: { id: record.id },
@@ -465,9 +467,11 @@ export async function reviewCorrection(req: AuthRequest, res: Response): Promise
         const workingMinutes = Math.floor(
           (effectiveClockOut.getTime() - effectiveClockIn.getTime()) / 60000,
         );
-        const otThresholdMinutes = await settingsService.getOtThresholdMinutes();
+        const correctionDow = correction.attendance.date.getUTCDay();
+        const correctionIsWeekend = correctionDow === 0 || correctionDow === 6;
+        const otThresholdMinutes = correctionIsWeekend ? 0 : await settingsService.getOtThresholdMinutes();
         updateData.workingMinutes = workingMinutes;
-        updateData.overtimeMinutes = Math.max(0, workingMinutes - otThresholdMinutes);
+        updateData.overtimeMinutes = correctionIsWeekend ? workingMinutes : Math.max(0, workingMinutes - otThresholdMinutes);
       }
 
       // mark attendance as manually corrected

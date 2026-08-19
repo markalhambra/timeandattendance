@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth.middleware';
 import { prisma } from '../config/database';
 import * as XLSX from 'xlsx';
+import { ApprovalStatus } from '@prisma/client';
 import { phtYear, phtMonth } from '../utils/timezone';
 
 const MAX_REPORT_DAYS = 92; // ~1 quarter; keeps Vercel function within 10s timeout
@@ -263,6 +264,82 @@ export async function absenceReport(req: AuthRequest, res: Response): Promise<vo
     res.json({ success: true, data: { chartData, summary } });
   } catch {
     res.status(500).json({ success: false, message: 'Failed to generate report.' });
+  }
+}
+
+export async function otCreditsReport(req: AuthRequest, res: Response): Promise<void> {
+  const { departmentId, employeeId } = req.query as Record<string, string>;
+
+  try {
+    const now = new Date();
+    const where: any = {
+      status: ApprovalStatus.APPROVED,
+      isConverted: false,
+      approvedExpiry: { gt: now },
+    };
+    if (employeeId) where.employeeId = employeeId;
+    else if (departmentId) where.employee = { departmentId, isArchived: false };
+    else where.employee = { isArchived: false };
+
+    const records = await prisma.overtimeRecord.findMany({
+      where,
+      include: {
+        employee: {
+          select: {
+            firstName: true, lastName: true, employeeNumber: true,
+            department: { select: { name: true } },
+          },
+        },
+      },
+      orderBy: [{ employee: { lastName: 'asc' } }, { approvedExpiry: 'asc' }],
+    });
+
+    // chart: available OT hours per department
+    const byDeptChart = new Map<string, number>();
+    for (const r of records) {
+      const dept = r.employee.department?.name ?? 'Unknown';
+      byDeptChart.set(dept, (byDeptChart.get(dept) || 0) + r.minutes);
+    }
+    const chartData = Array.from(byDeptChart.entries())
+      .map(([date, minutes]) => ({ date, count: parseFloat((minutes / 60).toFixed(2)) }))
+      .sort((a, b) => b.count - a.count);
+
+    // summary: one row per employee, sorted by most available hours
+    const byEmp = new Map<string, {
+      name: string; empNo: string; dept: string;
+      records: number; totalMinutes: number; earliestExpiry: Date;
+    }>();
+    for (const r of records) {
+      if (!byEmp.has(r.employeeId)) {
+        byEmp.set(r.employeeId, {
+          name: `${r.employee.firstName} ${r.employee.lastName}`,
+          empNo: r.employee.employeeNumber ?? '—',
+          dept: r.employee.department?.name ?? '—',
+          records: 0,
+          totalMinutes: 0,
+          earliestExpiry: r.approvedExpiry!,
+        });
+      }
+      const e = byEmp.get(r.employeeId)!;
+      e.records++;
+      e.totalMinutes += r.minutes;
+      if (r.approvedExpiry && r.approvedExpiry < e.earliestExpiry) e.earliestExpiry = r.approvedExpiry;
+    }
+
+    const summary = Array.from(byEmp.values())
+      .sort((a, b) => b.totalMinutes - a.totalMinutes)
+      .map((e) => ({
+        Employee: e.name,
+        'Emp No.': e.empNo,
+        Department: e.dept,
+        'OT Records': e.records,
+        'Total OT Hours': (e.totalMinutes / 60).toFixed(2),
+        'Earliest Expiry': e.earliestExpiry.toISOString().split('T')[0],
+      }));
+
+    res.json({ success: true, data: { chartData, summary } });
+  } catch {
+    res.status(500).json({ success: false, message: 'Failed to generate OT credits report.' });
   }
 }
 

@@ -10,4 +10,5 @@ reportRoutes.get('/attendance', reportController.attendanceReport);
 reportRoutes.get('/leave', reportController.leaveReport);
 reportRoutes.get('/overtime', reportController.overtimeReport);
 reportRoutes.get('/absence', reportController.absenceReport);
+reportRoutes.get('/ot-credits', reportController.otCreditsReport);
 reportRoutes.get('/attendance/export', reportController.exportAttendance);
