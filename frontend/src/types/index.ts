@@ -192,7 +192,7 @@ export interface OvertimeRecord {
   isConverted: boolean;
   createdAt: string;
   employee?: Employee;
-  conversion?: OvertimeConversion;
+  conversions?: OvertimeConversion[];
 }
 
 export interface OvertimeConversion {

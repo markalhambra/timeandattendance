@@ -34,7 +34,7 @@ export async function getMyOvertime(req: AuthRequest, res: Response): Promise<vo
     const [records, total] = await Promise.all([
       prisma.overtimeRecord.findMany({
         where,
-        include: { conversion: true },
+        include: { conversions: true },
         orderBy: { date: 'desc' },
         skip,
         take: parseInt(limit),
@@ -54,22 +54,26 @@ export async function getOvertimeCredits(req: AuthRequest, res: Response): Promi
 
   try {
     const now = new Date();
-    // Exclude records that already have a PENDING conversion in-flight (prevent double-submit)
-    const inFlightOvertimeIds = await prisma.overtimeConversion.findMany({
-      where: { employeeId, status: 'PENDING' },
-      select: { overtimeId: true },
-    }).then((rows) => rows.map((r) => r.overtimeId));
+    const [rawCredits, pendingConversions] = await Promise.all([
+      prisma.overtimeRecord.findMany({
+        where: { employeeId, status: ApprovalStatus.APPROVED, isConverted: false, approvedExpiry: { gt: now } },
+        orderBy: { approvedExpiry: 'asc' },
+      }),
+      prisma.overtimeConversion.findMany({
+        where: { employeeId, status: 'PENDING' },
+        select: { overtimeId: true, minutesToConvert: true },
+      }),
+    ]);
 
-    const credits = await prisma.overtimeRecord.findMany({
-      where: {
-        employeeId,
-        status: ApprovalStatus.APPROVED,
-        isConverted: false,
-        approvedExpiry: { gt: now },
-        ...(inFlightOvertimeIds.length ? { id: { notIn: inFlightOvertimeIds } } : {}),
-      },
-      orderBy: { approvedExpiry: 'asc' },
-    });
+    // Sum pending committed minutes per OT record to compute true available balance
+    const pendingByRecord = new Map<string, number>();
+    for (const p of pendingConversions) {
+      pendingByRecord.set(p.overtimeId, (pendingByRecord.get(p.overtimeId) ?? 0) + p.minutesToConvert);
+    }
+
+    const credits = rawCredits
+      .map((r) => ({ ...r, minutes: r.minutes - (pendingByRecord.get(r.id) ?? 0) }))
+      .filter((r) => r.minutes > 0);
 
     const totalMinutes = credits.reduce((s, c) => s + c.minutes, 0);
 
@@ -114,16 +118,17 @@ export async function convertOvertime(req: AuthRequest, res: Response): Promise<
       return;
     }
 
-    // Block if a pending/approved conversion already exists for any of these records
-    const existingConversions = await prisma.overtimeConversion.findMany({
-      where: { overtimeId: { in: ids }, status: { not: 'REJECTED' } },
+    // Sum pending committed minutes per record to compute true available balance
+    const pendingConversions = await prisma.overtimeConversion.findMany({
+      where: { overtimeId: { in: ids }, status: 'PENDING' },
+      select: { overtimeId: true, minutesToConvert: true },
     });
-    if (existingConversions.length > 0) {
-      res.status(400).json({ success: false, message: 'A pending conversion already exists for one or more selected records.' });
-      return;
+    const pendingByRecord = new Map<string, number>();
+    for (const p of pendingConversions) {
+      pendingByRecord.set(p.overtimeId, (pendingByRecord.get(p.overtimeId) ?? 0) + p.minutesToConvert);
     }
 
-    const totalAvailable = records.reduce((s, r) => s + r.minutes, 0);
+    const totalAvailable = records.reduce((s, r) => s + r.minutes - (pendingByRecord.get(r.id) ?? 0), 0);
     const toConvert = requestedMinutes ?? totalAvailable;
     const minMinutes = conversionType === 'CTO' ? CTO_MIN_MINUTES : CDO_MIN_MINUTES;
 
@@ -248,7 +253,7 @@ export async function getAllOvertime(req: AuthRequest, res: Response): Promise<v
     const [records, total] = await Promise.all([
       prisma.overtimeRecord.findMany({
         where,
-        include: { employee: { include: { department: true } }, conversion: true },
+        include: { employee: { include: { department: true } }, conversions: true },
         orderBy: { createdAt: 'desc' },
         skip,
         take: parseInt(limit),

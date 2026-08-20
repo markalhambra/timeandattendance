@@ -369,7 +369,7 @@ model OvertimeRecord {
 
   employee        Employee       @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   attendance      AttendanceRecord? @relation(fields: [attendanceId], references: [id])
-  conversion      OvertimeConversion?
+  conversions     OvertimeConversion[]
 
   @@index([employeeId])
   @@index([status])
@@ -379,7 +379,7 @@ model OvertimeRecord {
 model OvertimeConversion {
   id             String                @id @default(uuid())
   employeeId     String
-  overtimeId     String                @unique
+  overtimeId     String
   conversionType OvertimeConversionType
   minutesToConvert Int
   status         ApprovalStatus        @default(PENDING)
