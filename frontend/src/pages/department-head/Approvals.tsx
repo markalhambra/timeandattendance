@@ -5,10 +5,20 @@ import { useAuth } from '../../contexts/AuthContext';
 import { LeaveRequest, OvertimeRecord, AttendanceCorrection, OvertimeConversion } from '../../types';
 import { format, parseISO } from 'date-fns';
 import toast from 'react-hot-toast';
+import { CONVERSION_NOTICE, leaveTypeLabel, leaveTypeNotice } from '../../utils/leaveNotice';
 
 type Tab = 'leaves' | 'overtime' | 'corrections' | 'conversions';
 
 interface ReviewModalState { type: Tab; id: string; action: 'APPROVED' | 'REJECTED'; name: string; }
+
+function formatFiledDate(value?: string | null): string {
+  if (!value) return '—';
+  try {
+    return format(parseISO(value), 'MMM d, yyyy');
+  } catch {
+    return '—';
+  }
+}
 
 export default function ApprovalsPage() {
   const { user } = useAuth();
@@ -76,21 +86,6 @@ export default function ApprovalsPage() {
     { key: 'conversions', label: 'OT Conversions', count: conversions?.length },
   ];
 
-  const leaveTypeLabel: Record<string, string> = {
-    SICK: 'Sick',
-    VACATION: 'Vacation',
-    PML: 'Pamilya Muna',
-    SML: 'Sarili Muna',
-    EMERGENCY: 'Emergency Leave',
-    SOLO_PARENT: 'Solo Parent Leave',
-    MATERNITY: 'Maternity Leave',
-    PATERNITY: 'Paternity Leave',
-    BEREAVEMENT: 'Bereavement Leave',
-    MAGNA_CARTA_WOMEN: 'Special Leave for Women (RA 9170)',
-    CALAMITY: 'Calamity Leave (CL)',
-    VAWC: 'VAWC Leave',
-  };
-
   const ActionButtons = ({ type, id, name, ownerId }: { type: Tab; id: string; name: string; ownerId?: string }) => {
     // HR/Admin cannot approve their own requests
     if (ownerId && user?.employee?.id && ownerId === user.employee.id) {
@@ -130,17 +125,23 @@ export default function ApprovalsPage() {
         return (
           <div className="card overflow-hidden">
             <div className="overflow-x-auto">
-            <table className="w-full min-w-[900px]">
+            <table className="w-full min-w-[980px]">
               <thead className="bg-gray-50 border-b border-gray-100">
-                <tr>{['Employee', 'Type', 'Start', 'End', 'Days', 'Reason', 'Status', 'Remarks', 'Reviewed On', ''].map((h) => <th key={h} className="table-header">{h}</th>)}</tr>
+                <tr>{['Employee', 'Type', 'Filed', 'Start', 'End', 'Days', 'Reason', 'Status', 'Remarks', 'Reviewed On', ''].map((h) => <th key={h} className="table-header">{h}</th>)}</tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {!allLeaves.length ? (
-                  <tr><td colSpan={10} className="text-center text-sm text-gray-400 py-10">No leave records</td></tr>
-                ) : allLeaves.map((l) => (
+                  <tr><td colSpan={11} className="text-center text-sm text-gray-400 py-10">No leave records</td></tr>
+                ) : allLeaves.map((l) => {
+                  const notice = leaveTypeNotice(l.leaveType);
+                  return (
                   <tr key={l.id} className="hover:bg-gray-50">
                     <td className="table-cell font-medium">{l.employee?.firstName} {l.employee?.lastName}</td>
-                    <td className="table-cell">{leaveTypeLabel[l.leaveType] || l.leaveType}</td>
+                    <td className="table-cell align-top">
+                      <div className="font-medium">{leaveTypeLabel(l.leaveType)}</div>
+                      {notice && <div className="text-[11px] text-gray-400 mt-0.5 leading-snug whitespace-normal max-w-[12rem]">{notice}</div>}
+                    </td>
+                    <td className="table-cell text-gray-500 text-xs whitespace-nowrap">{formatFiledDate(l.createdAt)}</td>
                     <td className="table-cell">{format(parseISO(l.startDate), 'MMM d')}</td>
                     <td className="table-cell">{format(parseISO(l.endDate), 'MMM d, yyyy')}</td>
                     <td className="table-cell">{l.totalDays}</td>
@@ -156,7 +157,8 @@ export default function ApprovalsPage() {
                       {l.status === 'PENDING' && <ActionButtons type="leaves" id={l.id} name={`${l.employee?.firstName} ${l.employee?.lastName}`} ownerId={l.employeeId} />}
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>            </div>          </div>
         );
@@ -170,17 +172,18 @@ export default function ApprovalsPage() {
         return (
           <div className="card overflow-hidden">
             <div className="overflow-x-auto">
-            <table className="w-full min-w-[700px]">
+            <table className="w-full min-w-[780px]">
               <thead className="bg-gray-50 border-b border-gray-100">
-                <tr>{['Employee', 'Date', 'Hours', 'Reason', 'Status', 'Remarks', 'Reviewed On', ''].map((h) => <th key={h} className="table-header">{h}</th>)}</tr>
+                <tr>{['Employee', 'OT Date', 'Filed', 'Hours', 'Reason', 'Status', 'Remarks', 'Reviewed On', ''].map((h) => <th key={h} className="table-header">{h}</th>)}</tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {!allOvertime.length ? (
-                  <tr><td colSpan={8} className="text-center text-sm text-gray-400 py-10">No overtime records</td></tr>
+                  <tr><td colSpan={9} className="text-center text-sm text-gray-400 py-10">No overtime records</td></tr>
                 ) : allOvertime.map((o) => (
                   <tr key={o.id} className="hover:bg-gray-50">
                     <td className="table-cell font-medium">{(o as any).employee?.firstName} {(o as any).employee?.lastName}</td>
                     <td className="table-cell">{format(parseISO(o.date), 'MMM d, yyyy')}</td>
+                    <td className="table-cell text-gray-500 text-xs whitespace-nowrap">{formatFiledDate(o.createdAt)}</td>
                     <td className="table-cell font-semibold">{(o.minutes / 60).toFixed(1)}h</td>
                     <td className="table-cell min-w-[14rem] max-w-md whitespace-normal break-words text-gray-500 text-xs align-top" title={o.reason || undefined}>{o.reason || '—'}</td>
                     <td className="table-cell">
@@ -204,13 +207,14 @@ export default function ApprovalsPage() {
         <div className="space-y-3">
           <div className="card overflow-hidden">
             <div className="overflow-x-auto">
-            <table className="w-full min-w-[600px]">
-              <thead className="bg-gray-50 border-b border-gray-100"><tr>{['Employee', 'Date', 'Req. In', 'Req. Out', 'Reason', ''].map((h) => <th key={h} className="table-header">{h}</th>)}</tr></thead>
+            <table className="w-full min-w-[680px]">
+              <thead className="bg-gray-50 border-b border-gray-100"><tr>{['Employee', 'Date', 'Filed', 'Req. In', 'Req. Out', 'Reason', ''].map((h) => <th key={h} className="table-header">{h}</th>)}</tr></thead>
               <tbody className="divide-y divide-gray-50">
-                {!corrections?.length ? <tr><td colSpan={6} className="text-center text-sm text-gray-400 py-10">No pending corrections</td></tr> : corrections.map((c) => (
+                {!corrections?.length ? <tr><td colSpan={7} className="text-center text-sm text-gray-400 py-10">No pending corrections</td></tr> : corrections.map((c) => (
                   <tr key={c.id} className="hover:bg-gray-50">
                     <td className="table-cell font-medium">{(c as any).employee?.firstName} {(c as any).employee?.lastName}</td>
                     <td className="table-cell">{c.attendance?.date ? format(parseISO(c.attendance.date), 'MMM d, yyyy') : '—'}</td>
+                    <td className="table-cell text-gray-500 text-xs whitespace-nowrap">{formatFiledDate(c.createdAt)}</td>
                     <td className="table-cell">{c.requestedClockIn ? format(parseISO(c.requestedClockIn), 'hh:mm a') : '—'}</td>
                     <td className="table-cell">{c.requestedClockOut ? format(parseISO(c.requestedClockOut), 'hh:mm a') : '—'}</td>
                     <td className="table-cell min-w-[14rem] max-w-md whitespace-normal break-words text-gray-500 text-xs align-top" title={(c as any).reason}>{(c as any).reason}</td>
@@ -227,17 +231,18 @@ export default function ApprovalsPage() {
             {showHistory && (
               <div className="card overflow-hidden mt-2">
                 <div className="overflow-x-auto">
-                <table className="w-full min-w-[650px]">
+                <table className="w-full min-w-[720px]">
                   <thead className="bg-gray-50 border-b border-gray-100">
-                    <tr>{['Employee', 'Date', 'Req. In', 'Req. Out', 'Decision', 'Remarks', 'Reviewed On'].map((h) => <th key={h} className="table-header">{h}</th>)}</tr>
+                    <tr>{['Employee', 'Date', 'Filed', 'Req. In', 'Req. Out', 'Decision', 'Remarks', 'Reviewed On'].map((h) => <th key={h} className="table-header">{h}</th>)}</tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
                     {!correctionsHistory.length ? (
-                      <tr><td colSpan={7} className="text-center text-sm text-gray-400 py-8">No reviewed corrections</td></tr>
+                      <tr><td colSpan={8} className="text-center text-sm text-gray-400 py-8">No reviewed corrections</td></tr>
                     ) : correctionsHistory.map((c) => (
                       <tr key={c.id} className="hover:bg-gray-50">
                         <td className="table-cell font-medium">{(c as any).employee?.firstName} {(c as any).employee?.lastName}</td>
                         <td className="table-cell">{c.attendance?.date ? format(parseISO(c.attendance.date), 'MMM d, yyyy') : '—'}</td>
+                        <td className="table-cell text-gray-500 text-xs whitespace-nowrap">{formatFiledDate(c.createdAt)}</td>
                         <td className="table-cell">{c.requestedClockIn ? format(parseISO(c.requestedClockIn), 'hh:mm a') : '—'}</td>
                         <td className="table-cell">{c.requestedClockOut ? format(parseISO(c.requestedClockOut), 'hh:mm a') : '—'}</td>
                         <td className="table-cell">
@@ -258,14 +263,18 @@ export default function ApprovalsPage() {
         <div className="space-y-3">
           <div className="card overflow-hidden">
             <div className="overflow-x-auto">
-            <table className="w-full min-w-[560px]">
-              <thead className="bg-gray-50 border-b border-gray-100"><tr>{['Employee', 'Dept', 'Type', 'Scheduled Date', 'Hours', ''].map((h) => <th key={h} className="table-header">{h}</th>)}</tr></thead>
+            <table className="w-full min-w-[640px]">
+              <thead className="bg-gray-50 border-b border-gray-100"><tr>{['Employee', 'Dept', 'Type', 'Filed', 'Scheduled Date', 'Hours', ''].map((h) => <th key={h} className="table-header">{h}</th>)}</tr></thead>
               <tbody className="divide-y divide-gray-50">
-                {!conversions.length ? <tr><td colSpan={6} className="text-center text-sm text-gray-400 py-10">No pending conversions</td></tr> : conversions.map((c) => (
+                {!conversions.length ? <tr><td colSpan={7} className="text-center text-sm text-gray-400 py-10">No pending conversions</td></tr> : conversions.map((c) => (
                   <tr key={c.id} className="hover:bg-gray-50">
                     <td className="table-cell font-medium">{(c as any).employee?.firstName} {(c as any).employee?.lastName}</td>
                     <td className="table-cell text-xs text-gray-500">{(c as any).employee?.department?.name || '—'}</td>
-                    <td className="table-cell font-semibold">{c.conversionType}</td>
+                    <td className="table-cell align-top">
+                      <div className="font-semibold">{c.conversionType}</div>
+                      <div className="text-[11px] text-gray-400 mt-0.5 leading-snug">{CONVERSION_NOTICE}</div>
+                    </td>
+                    <td className="table-cell text-gray-500 text-xs whitespace-nowrap">{formatFiledDate(c.createdAt)}</td>
                     <td className="table-cell">{c.scheduledDate ? format(parseISO(c.scheduledDate), 'MMM d, yyyy') : '—'}</td>
                     <td className="table-cell">{(c.minutesToConvert / 60).toFixed(1)}h</td>
                     <td className="table-cell"><ActionButtons type="conversions" id={c.id} name={`${(c as any).employee?.firstName} ${(c as any).employee?.lastName}`} ownerId={(c as any).employeeId} /></td>
@@ -281,13 +290,13 @@ export default function ApprovalsPage() {
             {showHistory && (
               <div className="card overflow-hidden mt-2">
                 <div className="overflow-x-auto">
-                <table className="w-full min-w-[750px]">
+                <table className="w-full min-w-[820px]">
                   <thead className="bg-gray-50 border-b border-gray-100">
-                    <tr>{['Employee', 'Dept', 'Type', 'Hours', 'Decision', 'Reviewed By', 'Notes', 'Reviewed On'].map((h) => <th key={h} className="table-header">{h}</th>)}</tr>
+                    <tr>{['Employee', 'Dept', 'Type', 'Filed', 'Hours', 'Decision', 'Reviewed By', 'Notes', 'Reviewed On'].map((h) => <th key={h} className="table-header">{h}</th>)}</tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
                     {!conversionsHistory.length ? (
-                      <tr><td colSpan={8} className="text-center text-sm text-gray-400 py-8">No reviewed conversions</td></tr>
+                      <tr><td colSpan={9} className="text-center text-sm text-gray-400 py-8">No reviewed conversions</td></tr>
                     ) : conversionsHistory.map((c) => {
                       const reviewedBy = c.deptHeadStatus && c.deptHeadStatus !== 'PENDING' ? 'Dept Head'
                         : c.hrStatus && c.hrStatus !== 'PENDING' ? 'HR'
@@ -299,7 +308,11 @@ export default function ApprovalsPage() {
                         <tr key={c.id} className="hover:bg-gray-50">
                           <td className="table-cell font-medium">{(c as any).employee?.firstName} {(c as any).employee?.lastName}</td>
                           <td className="table-cell text-xs text-gray-500">{(c as any).employee?.department?.name || '—'}</td>
-                          <td className="table-cell">{c.conversionType}</td>
+                          <td className="table-cell align-top">
+                            <div>{c.conversionType}</div>
+                            <div className="text-[11px] text-gray-400 mt-0.5 leading-snug">{CONVERSION_NOTICE}</div>
+                          </td>
+                          <td className="table-cell text-gray-500 text-xs whitespace-nowrap">{formatFiledDate(c.createdAt)}</td>
                           <td className="table-cell">{(c.minutesToConvert / 60).toFixed(1)}h</td>
                           <td className="table-cell"><span className={`badge ${c.status === 'APPROVED' ? 'badge-approved' : 'badge-rejected'}`}>{c.status}</span></td>
                           <td className="table-cell text-xs text-gray-600">{reviewedBy}</td>
