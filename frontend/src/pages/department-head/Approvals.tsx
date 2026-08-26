@@ -5,7 +5,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { LeaveRequest, OvertimeRecord, AttendanceCorrection, OvertimeConversion } from '../../types';
 import { format, parseISO } from 'date-fns';
 import toast from 'react-hot-toast';
-import { CONVERSION_NOTICE, leaveTypeLabel, leaveTypeNotice } from '../../utils/leaveNotice';
+import { CONVERSION_NOTICE, leaveTypeLabel } from '../../utils/leaveNotice';
 
 type Tab = 'leaves' | 'overtime' | 'corrections' | 'conversions';
 
@@ -132,15 +132,10 @@ export default function ApprovalsPage() {
               <tbody className="divide-y divide-gray-50">
                 {!allLeaves.length ? (
                   <tr><td colSpan={11} className="text-center text-sm text-gray-400 py-10">No leave records</td></tr>
-                ) : allLeaves.map((l) => {
-                  const notice = leaveTypeNotice(l.leaveType);
-                  return (
+                ) : allLeaves.map((l) => (
                   <tr key={l.id} className="hover:bg-gray-50">
                     <td className="table-cell font-medium">{l.employee?.firstName} {l.employee?.lastName}</td>
-                    <td className="table-cell align-top">
-                      <div className="font-medium">{leaveTypeLabel(l.leaveType)}</div>
-                      {notice && <div className="text-[11px] text-gray-400 mt-0.5 leading-snug whitespace-normal max-w-[12rem]">{notice}</div>}
-                    </td>
+                    <td className="table-cell">{leaveTypeLabel(l.leaveType)}</td>
                     <td className="table-cell text-gray-500 text-xs whitespace-nowrap">{formatFiledDate(l.createdAt)}</td>
                     <td className="table-cell">{format(parseISO(l.startDate), 'MMM d')}</td>
                     <td className="table-cell">{format(parseISO(l.endDate), 'MMM d, yyyy')}</td>
@@ -157,8 +152,7 @@ export default function ApprovalsPage() {
                       {l.status === 'PENDING' && <ActionButtons type="leaves" id={l.id} name={`${l.employee?.firstName} ${l.employee?.lastName}`} ownerId={l.employeeId} />}
                     </td>
                   </tr>
-                  );
-                })}
+                ))}
               </tbody>
             </table>            </div>          </div>
         );

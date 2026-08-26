@@ -1,6 +1,6 @@
 import type { LeaveType } from '../types';
 
-/** Module 06 leave filing notice periods (display guidance for approvers). */
+/** Module 06 leave filing notice periods (shown on employee leave filing form). */
 export const LEAVE_TYPE_META: Record<
   LeaveType,
   { label: string; notice: string }

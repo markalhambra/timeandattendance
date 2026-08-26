@@ -5,22 +5,29 @@ import { useAuth } from '../../contexts/AuthContext';
 import { LeaveBalance, LeaveRequest, LeaveType, Employee } from '../../types';
 import { format, parseISO, addMonths } from 'date-fns';
 import toast from 'react-hot-toast';
+import { LEAVE_TYPE_META, leaveTypeNotice } from '../../utils/leaveNotice';
 
-const LEAVE_TYPES: { value: LeaveType; label: string; desc: string }[] = [
-  { value: 'SICK', label: 'Sick Leave', desc: 'For illness or medical appointments' },
-  { value: 'VACATION', label: 'Vacation Leave', desc: 'For personal time off' },
-  { value: 'PML', label: 'Pamilya Muna Leave', desc: 'For family-related matters' },
-  { value: 'SML', label: 'Sarili Muna Leave', desc: '7 days/year; 3.5 days credited every January 1 and July 1' },
-  { value: 'EMERGENCY', label: 'Emergency Leave', desc: 'For urgent and unexpected situations' },
-  { value: 'SOLO_PARENT', label: 'Solo Parent Leave', desc: 'For qualified solo parents' },
-  { value: 'MATERNITY', label: 'Maternity Leave', desc: 'For childbirth and recovery' },
-  { value: 'PATERNITY', label: 'Paternity Leave', desc: 'For fathers after childbirth' },
-  { value: 'BEREAVEMENT', label: 'Bereavement Leave', desc: 'For the loss of a family member' },
-  { value: 'MAGNA_CARTA_WOMEN', label: 'Special Leave for Women (RA 9170)', desc: 'Special leave for women under RA 9170' },
-  { value: 'CALAMITY', label: 'Calamity Leave (CL)', desc: '3 days. Not charged against regular leave credits. Must be used within 10 days of the calamity.' },
-  { value: 'VAWC', label: 'VAWC Leave', desc: '10 days paid (RA 9262). May be taken continuously or intermittently. Requires barangay/court certification.' },
-  { value: 'LWOP', label: 'Leave Without Pay', desc: 'Unpaid leave — no balance required' },
+const LEAVE_TYPE_ORDER: LeaveType[] = [
+  'SICK',
+  'VACATION',
+  'PML',
+  'SML',
+  'EMERGENCY',
+  'SOLO_PARENT',
+  'MATERNITY',
+  'PATERNITY',
+  'BEREAVEMENT',
+  'MAGNA_CARTA_WOMEN',
+  'CALAMITY',
+  'VAWC',
+  'LWOP',
 ];
+
+const LEAVE_TYPES: { value: LeaveType; label: string; desc: string }[] = LEAVE_TYPE_ORDER.map((value) => ({
+  value,
+  label: LEAVE_TYPE_META[value].label,
+  desc: LEAVE_TYPE_META[value].notice,
+}));
 
 const STATUS_COLORS: Record<string, string> = {
   PENDING: 'badge-pending',
@@ -272,15 +279,27 @@ export default function LeavePage() {
               <div>
                 <label className="label">Leave Type</label>
                 {lwopOnly ? (
-                  <div className="input bg-gray-50 text-gray-700">Leave Without Pay (LWOP)</div>
+                  <div>
+                    <div className="input bg-gray-50 text-gray-700">Leave Without Pay (LWOP)</div>
+                    <p className="text-xs text-gray-500 mt-1.5">{leaveTypeNotice('LWOP')}</p>
+                  </div>
                 ) : (
-                  <select
-                    value={form.leaveType}
-                    onChange={(e) => setForm((f) => ({ ...f, leaveType: e.target.value as LeaveType, leaveDuration: 'FULL_DAY' }))}
-                    className="input"
-                  >
-                    {LEAVE_TYPES.map((lt) => <option key={lt.value} value={lt.value}>{lt.label}</option>)}
-                  </select>
+                  <div>
+                    <select
+                      value={form.leaveType}
+                      onChange={(e) => setForm((f) => ({ ...f, leaveType: e.target.value as LeaveType, leaveDuration: 'FULL_DAY' }))}
+                      className="input"
+                    >
+                      {LEAVE_TYPES.map((lt) => (
+                        <option key={lt.value} value={lt.value}>
+                          {lt.label} — {lt.desc}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-gray-500 mt-1.5">
+                      {LEAVE_TYPES.find((lt) => lt.value === form.leaveType)?.desc || leaveTypeNotice(form.leaveType)}
+                    </p>
+                  </div>
                 )}
               </div>
               {supportsHalfDay && (
