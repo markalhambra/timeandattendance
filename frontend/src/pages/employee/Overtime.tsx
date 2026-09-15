@@ -38,6 +38,7 @@ export default function OvertimePage() {
       toast.success('Conversion request submitted.');
       setShowModal(false);
       setSelectedRecords([]);
+      setHoursToConvert('');
       qc.invalidateQueries({ queryKey: ['overtime-credits'] });
       qc.invalidateQueries({ queryKey: ['my-conversions'] });
     },
@@ -71,8 +72,10 @@ export default function OvertimePage() {
     [selectedRecords, recordsMap],
   );
 
-  const minutesToConvert = hoursToConvert ? Math.round(parseFloat(hoursToConvert) * 60) : selectedTotal;
   const minMinutes = convType === 'CTO' ? 240 : 480;
+  const minutesToConvert = hoursToConvert
+    ? Math.round(parseFloat(hoursToConvert) * 60)
+    : selectedTotal >= minMinutes ? minMinutes : selectedTotal;
   const canConvert = minutesToConvert >= minMinutes && minutesToConvert <= selectedTotal;
 
   const statusBadge = (s: string) => {
@@ -214,7 +217,7 @@ export default function OvertimePage() {
               <label className="label">Conversion Type</label>
               <div className="grid grid-cols-2 gap-2">
                 {(['CTO', 'CDO'] as OvertimeConversionType[]).map((t) => (
-                  <button key={t} onClick={() => setConvType(t)} className={`p-3 rounded-xl border-2 text-left transition-all ${convType === t ? 'border-black bg-black text-white' : 'border-gray-200 hover:border-gray-400'}`}>
+                  <button key={t} onClick={() => { setConvType(t); setHoursToConvert(''); }} className={`p-3 rounded-xl border-2 text-left transition-all ${convType === t ? 'border-black bg-black text-white' : 'border-gray-200 hover:border-gray-400'}`}>
                     <div className="font-bold text-sm">{t}</div>
                     <div className={`text-xs ${convType === t ? 'text-gray-300' : 'text-gray-500'}`}>{t === 'CTO' ? 'Min 4 hours' : 'Min 8 hours'}</div>
                   </button>
@@ -248,17 +251,18 @@ export default function OvertimePage() {
               </div>
             </div>
 
-            {selectedRecords.length === 1 && (
+            {selectedRecords.length > 0 && (
               <div className="mb-4">
                 <label className="label">Hours to Convert <span className="text-gray-400 font-normal">(max {(selectedTotal / 60).toFixed(1)}h)</span></label>
                 <input
                   type="number"
                   min={(minMinutes / 60).toFixed(1)}
-                  max={(selectedTotal / 60).toFixed(1)}
-                  step="0.5"
-                  placeholder={`Default: ${(selectedTotal / 60).toFixed(1)}h (all)`}
+                  max={convType === 'CDO' ? '8.0' : (selectedTotal / 60).toFixed(1)}
+                  step="0.1"
+                  placeholder={`Default: ${(minMinutes / 60).toFixed(1)}h`}
                   value={hoursToConvert}
                   onChange={(e) => setHoursToConvert(e.target.value)}
+                  disabled={convType === 'CDO'}
                   className="input"
                 />
                 <div className={`mt-1 text-sm font-semibold ${canConvert ? 'text-green-600' : 'text-red-500'}`}>
@@ -266,7 +270,7 @@ export default function OvertimePage() {
                 </div>
               </div>
             )}
-            {selectedRecords.length !== 1 && (
+            {selectedRecords.length === 0 && (
               <div className={`mb-4 text-sm font-semibold ${canConvert ? 'text-green-600' : 'text-red-500'}`}>
                 Converting: {(minutesToConvert / 60).toFixed(1)}h — {canConvert ? 'Eligible' : `Minimum ${minMinutes / 60}h required`}
               </div>

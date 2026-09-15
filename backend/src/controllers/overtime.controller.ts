@@ -128,10 +128,18 @@ export async function convertOvertime(req: AuthRequest, res: Response): Promise<
       pendingByRecord.set(p.overtimeId, (pendingByRecord.get(p.overtimeId) ?? 0) + p.minutesToConvert);
     }
 
-    const totalAvailable = records.reduce((s, r) => s + r.minutes - (pendingByRecord.get(r.id) ?? 0), 0);
-    const toConvert = requestedMinutes ?? totalAvailable;
+    const totalAvailable = records.reduce((s, r) => s + Math.max(0, r.minutes - (pendingByRecord.get(r.id) ?? 0)), 0);
+    const toConvert = requestedMinutes === undefined ? totalAvailable : Number(requestedMinutes);
     const minMinutes = conversionType === 'CTO' ? CTO_MIN_MINUTES : CDO_MIN_MINUTES;
 
+    if (!Number.isInteger(toConvert) || toConvert <= 0) {
+      res.status(400).json({ success: false, message: 'Minutes to convert must be a positive whole number.' });
+      return;
+    }
+    if (conversionType === 'CDO' && toConvert !== CDO_MIN_MINUTES) {
+      res.status(400).json({ success: false, message: 'CDO conversion requires exactly 8 hours.' });
+      return;
+    }
     if (toConvert < minMinutes) {
       res.status(400).json({ success: false, message: `Minimum ${minMinutes / 60} hours required for ${conversionType} conversion.` });
       return;
@@ -141,34 +149,42 @@ export async function convertOvertime(req: AuthRequest, res: Response): Promise<
       return;
     }
 
-    // Single record → allow partial conversion (user-specified minutesToConvert)
-    // Multiple records → convert each record in full
-    const conversions = [];
-    if (records.length === 1) {
-      const conversion = await prisma.overtimeConversion.create({
+    const allocations: Array<{ overtimeId: string; minutes: number }> = [];
+    let remainingToAllocate = toConvert;
+    const orderedRecords = [...records].sort((a, b) => {
+      const expiryDiff = (a.approvedExpiry?.getTime() ?? Number.MAX_SAFE_INTEGER)
+        - (b.approvedExpiry?.getTime() ?? Number.MAX_SAFE_INTEGER);
+      if (expiryDiff !== 0) return expiryDiff;
+      const dateDiff = a.date.getTime() - b.date.getTime();
+      return dateDiff !== 0 ? dateDiff : a.id.localeCompare(b.id);
+    });
+
+    for (const record of orderedRecords) {
+      if (remainingToAllocate <= 0) break;
+      const availableMinutes = Math.max(0, record.minutes - (pendingByRecord.get(record.id) ?? 0));
+      const allocatedMinutes = Math.min(availableMinutes, remainingToAllocate);
+      if (allocatedMinutes <= 0) continue;
+
+      allocations.push({ overtimeId: record.id, minutes: allocatedMinutes });
+      remainingToAllocate -= allocatedMinutes;
+    }
+
+    if (remainingToAllocate !== 0) {
+      res.status(409).json({ success: false, message: 'Available overtime credits changed. Please refresh and try again.' });
+      return;
+    }
+
+    const conversions = await prisma.$transaction(
+      allocations.map((allocation) => prisma.overtimeConversion.create({
         data: {
           employeeId,
-          overtimeId: records[0].id,
+          overtimeId: allocation.overtimeId,
           conversionType: conversionType as OvertimeConversionType,
-          minutesToConvert: toConvert,
+          minutesToConvert: allocation.minutes,
           scheduledDate: scheduledDate ? new Date(scheduledDate) : undefined,
         },
-      });
-      conversions.push(conversion);
-    } else {
-      for (const record of records) {
-        const conversion = await prisma.overtimeConversion.create({
-          data: {
-            employeeId,
-            overtimeId: record.id,
-            conversionType: conversionType as OvertimeConversionType,
-            minutesToConvert: record.minutes,
-            scheduledDate: scheduledDate ? new Date(scheduledDate) : undefined,
-          },
-        });
-        conversions.push(conversion);
-      }
-    }
+      })),
+    );
 
     await notificationService.notifyDeptHead(employeeId, 'CTO_REQUEST', { conversionIds: conversions.map((c) => c.id) });
 

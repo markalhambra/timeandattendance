@@ -303,7 +303,7 @@ export async function backupDatabase(req: AuthRequest, res: Response): Promise<v
       Designation: e.designation ?? '',
       'Employment Type': e.employmentType ?? '',
       'Date Hired': e.dateHired?.toISOString().split('T')[0] ?? '',
-      Email: e.workEmail ?? '',
+      Email: e.email ?? '',
       'Is Active': e.isActive ? 'Y' : 'N',
     }))), 'Employees');
 
