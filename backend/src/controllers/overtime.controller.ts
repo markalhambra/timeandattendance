@@ -4,6 +4,7 @@ import { prisma } from '../config/database';
 import { ApprovalStatus, OvertimeConversionType } from '@prisma/client';
 import { notificationService } from '../services/notification.service';
 import { getHeadedDepartmentIds } from '../utils/departmentHead';
+import { getReviewerLabel } from '../utils/reviewerLabel';
 
 const CTO_MIN_MINUTES = 4 * 60;  // 4 hours
 const CDO_MIN_MINUTES = 8 * 60;  // 8 hours
@@ -335,7 +336,7 @@ export async function reviewOvertime(req: AuthRequest, res: Response): Promise<v
       type: 'Overtime Request',
       status,
       reviewer: req.user!.role === 'DEPARTMENT_HEAD' ? 'Department Head' : req.user!.role,
-    });
+    }, await getReviewerLabel(req.user!.sub, req.user!.role));
 
     prisma.auditLog.create({
       data: {
@@ -452,7 +453,7 @@ export async function reviewConversion(req: AuthRequest, res: Response): Promise
       type: `${conversion.conversionType} Conversion`,
       status,
       reviewer: role === 'DEPARTMENT_HEAD' ? 'Department Head' : role,
-    });
+    }, await getReviewerLabel(req.user!.sub, role));
 
     prisma.auditLog.create({
       data: {

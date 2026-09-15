@@ -5,6 +5,7 @@ import { ApprovalStatus, LeaveType, LeaveDuration } from '@prisma/client';
 import { notificationService } from '../services/notification.service';
 import { phtYear, phtMonth } from '../utils/timezone';
 import { getHeadedDepartmentIds } from '../utils/departmentHead';
+import { getReviewerLabel } from '../utils/reviewerLabel';
 
 const LEAVE_BALANCE_DEFAULTS: Record<LeaveType, number> = {
   SICK: 15,
@@ -333,7 +334,7 @@ export async function reviewLeave(req: AuthRequest, res: Response): Promise<void
           data: { pendingDays: { decrement: leave.totalDays }, usedDays: { increment: leave.totalDays } },
         });
       }
-      await notificationService.notifyEmployee(leave.employeeId, 'APPROVAL_RESULT', { type: 'Leave Request', status, reviewer: role });
+      await notificationService.notifyEmployee(leave.employeeId, 'APPROVAL_RESULT', { type: 'Leave Request', status, reviewer: role }, await getReviewerLabel(req.user!.sub, role));
       prisma.auditLog.create({ data: { userId: req.user!.sub, action: 'APPROVE', entity: 'LeaveRequest', entityId: id, ipAddress: req.ip, userAgent: req.headers['user-agent'] } }).catch(() => {});
       res.json({ success: true, data: updated }); return;
     }
@@ -357,7 +358,7 @@ export async function reviewLeave(req: AuthRequest, res: Response): Promise<void
           data: { pendingDays: { decrement: leave.totalDays } },
         });
       }
-      await notificationService.notifyEmployee(leave.employeeId, 'APPROVAL_RESULT', { type: 'Leave Request', status, reviewer: role });
+      await notificationService.notifyEmployee(leave.employeeId, 'APPROVAL_RESULT', { type: 'Leave Request', status, reviewer: role }, await getReviewerLabel(req.user!.sub, role));
       prisma.auditLog.create({ data: { userId: req.user!.sub, action: 'REJECT', entity: 'LeaveRequest', entityId: id, ipAddress: req.ip, userAgent: req.headers['user-agent'] } }).catch(() => {});
       res.json({ success: true, data: updated }); return;
     }
@@ -396,7 +397,7 @@ export async function reviewLeave(req: AuthRequest, res: Response): Promise<void
       type: 'Leave Request',
       status,
       reviewer: role === 'DEPARTMENT_HEAD' ? 'Department Head' : role,
-    });
+    }, await getReviewerLabel(req.user!.sub, role));
 
     prisma.auditLog.create({ data: { userId: req.user!.sub, action: finalStatus === 'APPROVED' ? 'APPROVE' : 'REJECT', entity: 'LeaveRequest', entityId: id, ipAddress: req.ip, userAgent: req.headers['user-agent'] } }).catch(() => {});
 

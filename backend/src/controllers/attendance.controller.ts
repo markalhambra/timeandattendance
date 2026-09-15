@@ -5,6 +5,7 @@ import { AttendanceStatus, ApprovalStatus } from '@prisma/client';
 import { notificationService } from '../services/notification.service';
 import { phtToday, phtYear, phtMonth } from '../utils/timezone';
 import { getHeadedDepartmentIds } from '../utils/departmentHead';
+import { getReviewerLabel } from '../utils/reviewerLabel';
 import { settingsService } from '../services/settings.service';
 
 const MIN_FILEABLE_OT_MINUTES = 60; // 1 hour minimum to create/file OT
@@ -504,7 +505,7 @@ export async function reviewCorrection(req: AuthRequest, res: Response): Promise
       type: 'Attendance Correction',
       status,
       reviewer: req.user!.role === 'DEPARTMENT_HEAD' ? 'Department Head' : req.user!.role,
-    });
+    }, await getReviewerLabel(req.user!.sub, req.user!.role));
 
     prisma.auditLog.create({
       data: {

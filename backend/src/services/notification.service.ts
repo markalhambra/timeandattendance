@@ -279,7 +279,7 @@ export const notificationService = {
     }
   },
 
-  async notifyEmployee(employeeId: string, type: NotificationType, data?: any): Promise<void> {
+  async notifyEmployee(employeeId: string, type: NotificationType, data?: any, emailReviewer?: string): Promise<void> {
     try {
       const employee = await prisma.employee.findUnique({
         where: { id: employeeId },
@@ -299,7 +299,7 @@ export const notificationService = {
         // Send email for approval results on the 4 tracked types
         if (type === 'APPROVAL_RESULT' && data?.type && data?.status) {
           const date     = new Date().toLocaleDateString('en-PH', { timeZone: 'Asia/Manila', dateStyle: 'long' });
-          const reviewer = data?.reviewer || 'Reviewer';
+          const reviewer = emailReviewer || data?.reviewer || 'Reviewer';
           await this.sendEmail(
             employee.user.email,
             `Your ${data.type} has been ${data.status.toLowerCase()} — ALPAS TAMS`,
