@@ -4,6 +4,14 @@ import { prisma } from '../config/database';
 import * as XLSX from 'xlsx';
 import { ApprovalStatus } from '@prisma/client';
 import { phtYear, phtMonth } from '../utils/timezone';
+import {
+  buildDailyAttendanceRows,
+  chartFromDailyRows,
+  isoDate,
+  LEAVE_TYPE_LABEL,
+  loadApprovedLeaveByDay,
+  workingDaysBetween,
+} from '../utils/attendanceDayRows';
 
 const MAX_REPORT_DAYS = 92; // ~1 quarter; keeps Vercel function within 10s timeout
 
@@ -31,77 +39,15 @@ export async function attendanceReport(req: AuthRequest, res: Response): Promise
   if (!validateDateRange(start, end, res)) return;
 
   try {
-    const where: any = { date: { gte: start, lte: end } };
-    if (status) where.status = status;
-    if (employeeId) where.employeeId = employeeId;
-    else if (departmentId) where.employee = { departmentId, isArchived: false };
-    else where.employee = { isArchived: false };
-
-    const records = await prisma.attendanceRecord.findMany({
-      where,
-      include: {
-        employee: {
-          select: {
-            firstName: true, lastName: true, employeeNumber: true, designation: true,
-            department: { select: { name: true } },
-          },
-        },
-      },
-      orderBy: [{ date: 'asc' }, { employee: { lastName: 'asc' } }],
-    });
-
-    // chartData: daily grouped by date
-    const byDate = new Map<string, { onsite: number; wfh: number; ob: number; total: number }>();
-    for (const r of records) {
-      const d = r.date.toISOString().split('T')[0];
-      if (!byDate.has(d)) byDate.set(d, { onsite: 0, wfh: 0, ob: 0, total: 0 });
-      const entry = byDate.get(d)!;
-      entry.total++;
-      if (r.status === 'ON_SITE') entry.onsite++;
-      else if (r.status === 'WFH') entry.wfh++;
-      else if (r.status === 'OB') entry.ob++;
-    }
-    const chartData = Array.from(byDate.entries()).map(([date, v]) => ({ date, ...v }));
-
-    // summary: per-record when filtered by employee, otherwise department rollup
-    let summary: object[];
-    if (employeeId) {
-      summary = records.map((r) => ({
-        Date: r.date.toISOString().split('T')[0],
-        Employee: `${r.employee.firstName} ${r.employee.lastName}`,
-        'Emp No.': r.employee.employeeNumber,
-        Department: r.employee.department?.name ?? '—',
-        Status: r.status,
-        'Clock In': r.clockIn?.toLocaleTimeString('en-PH') || '—',
-        'Clock Out': r.clockOut?.toLocaleTimeString('en-PH') || '—',
-        'Work Hours': r.workingMinutes ? (r.workingMinutes / 60).toFixed(2) : '0',
-        'OT Hours': r.overtimeMinutes ? (r.overtimeMinutes / 60).toFixed(2) : '0',
-      }));
-    } else {
-      const byDept = new Map<string, { dept: string; present: number; onsite: number; wfh: number; ob: number; totalWorkMins: number; totalOTMins: number }>();
-      for (const r of records) {
-        const dept = r.employee.department?.name ?? 'Unknown';
-        if (!byDept.has(dept)) byDept.set(dept, { dept, present: 0, onsite: 0, wfh: 0, ob: 0, totalWorkMins: 0, totalOTMins: 0 });
-        const e = byDept.get(dept)!;
-        e.present++;
-        if (r.status === 'ON_SITE') e.onsite++;
-        else if (r.status === 'WFH') e.wfh++;
-        else if (r.status === 'OB') e.ob++;
-        e.totalWorkMins += r.workingMinutes || 0;
-        e.totalOTMins += r.overtimeMinutes || 0;
-      }
-      summary = Array.from(byDept.values()).map((e) => ({
-        Department: e.dept,
-        'Records': e.present,
-        'On-Site': e.onsite,
-        WFH: e.wfh,
-        OB: e.ob,
-        'Total Work Hours': (e.totalWorkMins / 60).toFixed(1),
-        'Total OT Hours': (e.totalOTMins / 60).toFixed(1),
-      }));
-    }
-
-    res.json({ success: true, data: { chartData, summary, records } });
+    const rows = await buildDailyAttendanceRows(start, end, employeeId, departmentId, status);
+    const summary = rows.map((r) => ({
+      Date: r.Date,
+      Name: r.Name,
+      'Employee Number': r['Employee Number'],
+      Department: r.Department,
+      Status: r.Status,
+    }));
+    res.json({ success: true, data: { chartData: chartFromDailyRows(rows), summary } });
   } catch {
     res.status(500).json({ success: false, message: 'Failed to generate report.' });
   }
@@ -141,25 +87,10 @@ export async function leaveReport(req: AuthRequest, res: Response): Promise<void
     }
     const chartData = Array.from(byDate.entries()).map(([date, count]) => ({ date, count })).sort((a, b) => a.date.localeCompare(b.date));
 
-    const leaveTypeLabel: Record<string, string> = {
-      SICK: 'Sick Leave',
-      VACATION: 'Vacation',
-      PML: 'Pamilya Muna',
-      SML: 'Sarili Muna',
-      EMERGENCY: 'Emergency Leave',
-      SOLO_PARENT: 'Solo Parent Leave',
-      MATERNITY: 'Maternity Leave',
-      PATERNITY: 'Paternity Leave',
-      BEREAVEMENT: 'Bereavement Leave',
-      MAGNA_CARTA_WOMEN: 'Special Leave for Women (RA 9170)',
-      CALAMITY: 'Calamity Leave (CL)',
-      VAWC: 'VAWC Leave',
-    };
-
     const summary = leaves.map((l) => ({
       Employee: `${l.employee.firstName} ${l.employee.lastName}`,
       Department: l.employee.department?.name ?? '—',
-      'Leave Type': leaveTypeLabel[l.leaveType] || l.leaveType,
+      'Leave Type': LEAVE_TYPE_LABEL[l.leaveType] || l.leaveType,
       'Start Date': l.startDate.toISOString().split('T')[0],
       'End Date': l.endDate.toISOString().split('T')[0],
       Days: l.totalDays,
@@ -237,42 +168,40 @@ export async function absenceReport(req: AuthRequest, res: Response): Promise<vo
         department: { select: { name: true } },
         attendanceRecords: {
           where: { date: { gte: start, lte: end } },
-          select: { date: true, status: true },
+          select: { date: true },
         },
       },
     });
 
-    // Build working days list between start and end
-    const workingDays: string[] = [];
-    const cur = new Date(start);
-    while (cur <= end) {
-      const dow = cur.getDay();
-      if (dow !== 0 && dow !== 6) workingDays.push(cur.toISOString().split('T')[0]);
-      cur.setDate(cur.getDate() + 1);
-    }
+    const workingDays = workingDaysBetween(start, end);
+    const leaveByEmp = await loadApprovedLeaveByDay(employees.map((e) => e.id), start, end);
 
-    // chartData: daily total absences
     const byDate = new Map<string, number>();
     for (const d of workingDays) byDate.set(d, 0);
     for (const emp of employees) {
-      const presentDays = new Set(emp.attendanceRecords.map((r) => r.date.toISOString().split('T')[0]));
+      const presentDays = new Set(emp.attendanceRecords.map((r) => isoDate(r.date)));
+      const leaveDays = leaveByEmp.get(emp.id) ?? new Map<string, string>();
       for (const d of workingDays) {
-        if (!presentDays.has(d)) byDate.set(d, (byDate.get(d) || 0) + 1);
+        if (!presentDays.has(d) && !leaveDays.has(d)) byDate.set(d, (byDate.get(d) || 0) + 1);
       }
     }
     const chartData = Array.from(byDate.entries()).map(([date, count]) => ({ date, count })).sort((a, b) => a.date.localeCompare(b.date));
 
     const summary = employees.map((emp) => {
-      const presentDays = new Set(emp.attendanceRecords.map((r) => r.date.toISOString().split('T')[0]));
-      const absentDays = workingDays.filter((d) => !presentDays.has(d)).length;
+      const presentDays = new Set(emp.attendanceRecords.map((r) => isoDate(r.date)));
+      const leaveDays = leaveByEmp.get(emp.id) ?? new Map<string, string>();
+      const daysOnLeave = workingDays.filter((d) => leaveDays.has(d) && !presentDays.has(d)).length;
+      const absentDays = workingDays.filter((d) => !presentDays.has(d) && !leaveDays.has(d)).length;
+      const covered = workingDays.length - absentDays;
       return {
         Employee: `${emp.firstName} ${emp.lastName}`,
         'Emp No.': emp.employeeNumber,
         Department: emp.department?.name ?? '—',
         'Working Days': workingDays.length,
         'Days Present': presentDays.size,
+        'Days on Leave': daysOnLeave,
         'Days Absent': absentDays,
-        'Attendance Rate': workingDays.length > 0 ? `${((presentDays.size / workingDays.length) * 100).toFixed(0)}%` : '—',
+        'Attendance Rate': workingDays.length > 0 ? `${((covered / workingDays.length) * 100).toFixed(0)}%` : '—',
       };
     }).sort((a, b) => b['Days Absent'] - a['Days Absent']);
 
@@ -361,42 +290,10 @@ export async function otCreditsReport(req: AuthRequest, res: Response): Promise<
 export async function exportAttendance(req: AuthRequest, res: Response): Promise<void> {
   const { startDate, endDate, departmentId, employeeId, status } = req.query as Record<string, string>;
   const { start, end } = parseDateRange(startDate, endDate);
+  if (!validateDateRange(start, end, res)) return;
 
   try {
-    const where: any = { date: { gte: start, lte: end } };
-    if (status) where.status = status;
-    if (employeeId) where.employeeId = employeeId;
-    else if (departmentId) where.employee = { departmentId, isArchived: false };
-    else where.employee = { isArchived: false };
-
-    const records = await prisma.attendanceRecord.findMany({
-      where,
-      include: {
-        employee: {
-          select: {
-            firstName: true, lastName: true, employeeNumber: true, designation: true,
-            department: { select: { name: true } },
-          },
-        },
-      },
-      orderBy: [{ date: 'asc' }, { employee: { lastName: 'asc' } }],
-    });
-
-    const rows = records.map((r) => ({
-      'Employee No.': r.employee.employeeNumber,
-      'Last Name': r.employee.lastName,
-      'First Name': r.employee.firstName,
-      Department: r.employee.department?.name || '',
-      Designation: r.employee.designation || '',
-      Date: r.date.toISOString().split('T')[0],
-      'Clock In': r.clockIn?.toLocaleTimeString('en-PH') || '',
-      'Clock Out': r.clockOut?.toLocaleTimeString('en-PH') || '',
-      Status: r.status || '',
-      'Working Hours': r.workingMinutes ? (r.workingMinutes / 60).toFixed(2) : '0',
-      'Overtime Hours': r.overtimeMinutes ? (r.overtimeMinutes / 60).toFixed(2) : '0',
-      'Clock-In Lat': r.clockInLat || '',
-      'Clock-In Lng': r.clockInLng || '',
-    }));
+    const rows = await buildDailyAttendanceRows(start, end, employeeId, departmentId, status);
 
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.json_to_sheet(rows);

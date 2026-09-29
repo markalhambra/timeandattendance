@@ -28,6 +28,8 @@ const ReportChart = memo(function ReportChart({ reportData, reportType, startDat
             <Bar dataKey="onsite" name="On-Site" fill="#000" />
             <Bar dataKey="wfh" name="WFH" fill="#6b7280" />
             <Bar dataKey="ob" name="OB" fill="#9ca3af" />
+            <Bar dataKey="leave" name="Leave" fill="#2563eb" />
+            <Bar dataKey="absent" name="Absent" fill="#dc2626" />
           </BarChart>
         ) : reportType === 'ot-credits' ? (
           <BarChart data={reportData.chartData} layout="vertical">
@@ -187,7 +189,7 @@ export default function ReportsPage() {
       {reportData?.summary && (
         <div className="card overflow-hidden">
           <div className="px-5 py-4 border-b border-gray-100">
-            <h2 className="font-semibold text-sm">{reportType === 'ot-credits' ? 'Available OT Credits by Employee' : 'Summary by Department'}</h2>
+            <h2 className="font-semibold text-sm">{reportType === 'ot-credits' ? 'Available OT Credits by Employee' : reportType === 'attendance' ? 'Daily Attendance' : 'Summary by Department'}</h2>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full">
