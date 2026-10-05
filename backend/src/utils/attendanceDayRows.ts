@@ -93,6 +93,51 @@ export async function loadApprovedLeaveByDay(
   return map;
 }
 
+/** Approved CTO/CDO conversions keyed by employee → scheduled date → status label. */
+export async function loadApprovedCtoCdoByDay(
+  employeeIds: string[],
+  start: Date,
+  end: Date,
+): Promise<Map<string, Map<string, string>>> {
+  const map = new Map<string, Map<string, string>>();
+  if (!employeeIds.length) return map;
+
+  const conversions = await prisma.overtimeConversion.findMany({
+    where: {
+      employeeId: { in: employeeIds },
+      status: ApprovalStatus.APPROVED,
+      scheduledDate: { gte: start, lte: end, not: null },
+    },
+    select: {
+      employeeId: true,
+      conversionType: true,
+      scheduledDate: true,
+    },
+  });
+
+  for (const conversion of conversions) {
+    if (!conversion.scheduledDate) continue;
+    const day = isoDate(conversion.scheduledDate);
+    if (!isWeekday(day)) continue;
+
+    if (!map.has(conversion.employeeId)) map.set(conversion.employeeId, new Map());
+    const byDay = map.get(conversion.employeeId)!;
+    const label = conversion.conversionType; // CTO | CDO
+    const existing = byDay.get(day);
+    if (!existing) {
+      byDay.set(day, label);
+    } else if (!existing.split(' / ').includes(label)) {
+      byDay.set(day, `${existing} / ${label}`);
+    }
+  }
+  return map;
+}
+
+export function offDayStatus(leaveLabel?: string, ctoCdoLabel?: string): string {
+  if (leaveLabel && ctoCdoLabel) return `${leaveLabel} / ${ctoCdoLabel}`;
+  return leaveLabel || ctoCdoLabel || 'Absent';
+}
+
 export type DailyAttendanceRow = {
   Date: string;
   Name: string;
@@ -159,6 +204,9 @@ export async function buildDailyAttendanceRows(
   const leaveByEmp = status
     ? new Map<string, Map<string, string>>()
     : await loadApprovedLeaveByDay(ids, start, end);
+  const ctoCdoByEmp = status
+    ? new Map<string, Map<string, string>>()
+    : await loadApprovedCtoCdoByDay(ids, start, end);
   const workingDays = workingDaysBetween(start, end);
   const empById = new Map(employees.map((e) => [e.id, e]));
   const rows: DailyAttendanceRow[] = [];
@@ -183,6 +231,7 @@ export async function buildDailyAttendanceRows(
     for (const emp of employees) {
       const present = presentByEmp.get(emp.id) ?? new Set<string>();
       const leaves = leaveByEmp.get(emp.id) ?? new Map<string, string>();
+      const ctoCdo = ctoCdoByEmp.get(emp.id) ?? new Map<string, string>();
       for (const day of workingDays) {
         if (present.has(day)) continue;
         rows.push({
@@ -190,7 +239,7 @@ export async function buildDailyAttendanceRows(
           Name: `${emp.firstName} ${emp.lastName}`,
           'Employee Number': emp.employeeNumber,
           Department: emp.department?.name ?? '—',
-          Status: leaves.get(day) || 'Absent',
+          Status: offDayStatus(leaves.get(day), ctoCdo.get(day)),
           'Clock In': '',
           'Clock Out': '',
           'Working Hours': '',
@@ -204,16 +253,28 @@ export async function buildDailyAttendanceRows(
   return rows;
 }
 
+function chartBucket(status: string): 'onsite' | 'wfh' | 'ob' | 'leave' | 'cto' | 'cdo' | 'absent' {
+  if (status === 'On-Site') return 'onsite';
+  if (status === 'WFH') return 'wfh';
+  if (status === 'Official Business') return 'ob';
+  if (status === 'Absent') return 'absent';
+  // Pure or combined CTO/CDO labels (clock-in still wins and never reaches here)
+  const parts = status.split(' / ').map((p) => p.trim());
+  const onlyCtoCdo = parts.every((p) => p === 'CTO' || p === 'CDO');
+  if (onlyCtoCdo) {
+    if (parts.includes('CDO') && !parts.includes('CTO')) return 'cdo';
+    if (parts.includes('CTO') && !parts.includes('CDO')) return 'cto';
+    return 'cto'; // mixed CTO+CDO same day — chart under CTO
+  }
+  return 'leave';
+}
+
 export function chartFromDailyRows(rows: DailyAttendanceRow[]) {
-  const byDate = new Map<string, { onsite: number; wfh: number; ob: number; leave: number; absent: number }>();
+  const byDate = new Map<string, { onsite: number; wfh: number; ob: number; leave: number; cto: number; cdo: number; absent: number }>();
   for (const row of rows) {
-    if (!byDate.has(row.Date)) byDate.set(row.Date, { onsite: 0, wfh: 0, ob: 0, leave: 0, absent: 0 });
+    if (!byDate.has(row.Date)) byDate.set(row.Date, { onsite: 0, wfh: 0, ob: 0, leave: 0, cto: 0, cdo: 0, absent: 0 });
     const entry = byDate.get(row.Date)!;
-    if (row.Status === 'On-Site') entry.onsite++;
-    else if (row.Status === 'WFH') entry.wfh++;
-    else if (row.Status === 'Official Business') entry.ob++;
-    else if (row.Status === 'Absent') entry.absent++;
-    else entry.leave++;
+    entry[chartBucket(row.Status)]++;
   }
   return Array.from(byDate.entries())
     .map(([date, v]) => ({ date, ...v }))

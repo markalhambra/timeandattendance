@@ -29,6 +29,8 @@ const ReportChart = memo(function ReportChart({ reportData, reportType, startDat
             <Bar dataKey="wfh" name="WFH" fill="#6b7280" />
             <Bar dataKey="ob" name="OB" fill="#9ca3af" />
             <Bar dataKey="leave" name="Leave" fill="#2563eb" />
+            <Bar dataKey="cto" name="CTO" fill="#7c3aed" />
+            <Bar dataKey="cdo" name="CDO" fill="#0d9488" />
             <Bar dataKey="absent" name="Absent" fill="#dc2626" />
           </BarChart>
         ) : reportType === 'ot-credits' ? (

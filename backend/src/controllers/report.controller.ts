@@ -9,6 +9,7 @@ import {
   chartFromDailyRows,
   isoDate,
   LEAVE_TYPE_LABEL,
+  loadApprovedCtoCdoByDay,
   loadApprovedLeaveByDay,
   workingDaysBetween,
 } from '../utils/attendanceDayRows';
@@ -174,15 +175,20 @@ export async function absenceReport(req: AuthRequest, res: Response): Promise<vo
     });
 
     const workingDays = workingDaysBetween(start, end);
-    const leaveByEmp = await loadApprovedLeaveByDay(employees.map((e) => e.id), start, end);
+    const empIds = employees.map((e) => e.id);
+    const leaveByEmp = await loadApprovedLeaveByDay(empIds, start, end);
+    const ctoCdoByEmp = await loadApprovedCtoCdoByDay(empIds, start, end);
 
     const byDate = new Map<string, number>();
     for (const d of workingDays) byDate.set(d, 0);
     for (const emp of employees) {
       const presentDays = new Set(emp.attendanceRecords.map((r) => isoDate(r.date)));
       const leaveDays = leaveByEmp.get(emp.id) ?? new Map<string, string>();
+      const ctoCdoDays = ctoCdoByEmp.get(emp.id) ?? new Map<string, string>();
       for (const d of workingDays) {
-        if (!presentDays.has(d) && !leaveDays.has(d)) byDate.set(d, (byDate.get(d) || 0) + 1);
+        if (!presentDays.has(d) && !leaveDays.has(d) && !ctoCdoDays.has(d)) {
+          byDate.set(d, (byDate.get(d) || 0) + 1);
+        }
       }
     }
     const chartData = Array.from(byDate.entries()).map(([date, count]) => ({ date, count })).sort((a, b) => a.date.localeCompare(b.date));
@@ -190,8 +196,10 @@ export async function absenceReport(req: AuthRequest, res: Response): Promise<vo
     const summary = employees.map((emp) => {
       const presentDays = new Set(emp.attendanceRecords.map((r) => isoDate(r.date)));
       const leaveDays = leaveByEmp.get(emp.id) ?? new Map<string, string>();
+      const ctoCdoDays = ctoCdoByEmp.get(emp.id) ?? new Map<string, string>();
       const daysOnLeave = workingDays.filter((d) => leaveDays.has(d) && !presentDays.has(d)).length;
-      const absentDays = workingDays.filter((d) => !presentDays.has(d) && !leaveDays.has(d)).length;
+      const daysCtoCdo = workingDays.filter((d) => ctoCdoDays.has(d) && !presentDays.has(d) && !leaveDays.has(d)).length;
+      const absentDays = workingDays.filter((d) => !presentDays.has(d) && !leaveDays.has(d) && !ctoCdoDays.has(d)).length;
       const covered = workingDays.length - absentDays;
       return {
         Employee: `${emp.firstName} ${emp.lastName}`,
@@ -200,6 +208,7 @@ export async function absenceReport(req: AuthRequest, res: Response): Promise<vo
         'Working Days': workingDays.length,
         'Days Present': presentDays.size,
         'Days on Leave': daysOnLeave,
+        'Days CTO/CDO': daysCtoCdo,
         'Days Absent': absentDays,
         'Attendance Rate': workingDays.length > 0 ? `${((covered / workingDays.length) * 100).toFixed(0)}%` : '—',
       };
