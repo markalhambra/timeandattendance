@@ -114,6 +114,26 @@ export async function fileLeave(req: AuthRequest, res: Response): Promise<void> 
       }
     }
 
+    // Block duplicate pending leave with the same type, dates, and duration
+    const duplicateLeave = await prisma.leaveRequest.findFirst({
+      where: {
+        employeeId,
+        leaveType,
+        leaveDuration: leaveDuration as LeaveDuration,
+        startDate: start,
+        endDate: end,
+        status: ApprovalStatus.PENDING,
+      },
+      select: { id: true },
+    });
+    if (duplicateLeave) {
+      res.status(409).json({
+        success: false,
+        message: 'You already have a pending leave request with the same type, dates, and duration. Please wait for approval or cancel the existing request before filing again.',
+      });
+      return;
+    }
+
     const leave = await prisma.leaveRequest.create({
       data: { employeeId, leaveType, leaveDuration: leaveDuration as LeaveDuration, startDate: start, endDate: end, totalDays, reason },
     });

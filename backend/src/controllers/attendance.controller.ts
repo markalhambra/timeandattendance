@@ -334,6 +334,19 @@ export async function requestCorrection(req: AuthRequest, res: Response): Promis
       return;
     }
 
+    // One pending correction per attendance day while waiting for review
+    const pendingCorrection = await prisma.attendanceCorrection.findFirst({
+      where: { employeeId, attendanceId, status: 'PENDING' },
+      select: { id: true },
+    });
+    if (pendingCorrection) {
+      res.status(409).json({
+        success: false,
+        message: 'You already have a pending correction for this attendance record. Please wait for it to be reviewed before submitting another.',
+      });
+      return;
+    }
+
     const correction = await prisma.attendanceCorrection.create({
       data: {
         employeeId,
