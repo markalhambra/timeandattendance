@@ -10,11 +10,10 @@ As an HR user, you have all Employee and Department Head features, plus tools to
 ## Table of Contents
 1. [HR Dashboard](#1-hr-dashboard)
 2. [Employee Management](#2-employee-management)
-3. [Attendance Monitoring](#3-attendance-monitoring)
-4. [Leave Management and Balance Adjustments](#4-leave-management-and-balance-adjustments)
-5. [Approvals](#5-approvals)
-6. [Reports](#6-reports)
-7. [Frequently Asked Questions](#7-frequently-asked-questions)
+3. [Leave Management and Balance Adjustments](#3-leave-management-and-balance-adjustments)
+4. [Approvals](#4-approvals)
+5. [Reports](#5-reports)
+6. [Frequently Asked Questions](#6-frequently-asked-questions)
 
 ---
 
@@ -129,27 +128,7 @@ Click **Export** to download the current employee list as an Excel file.
 
 ---
 
-## 3. Attendance Monitoring
-
-**Navigation:** Sidebar → **HR Attendance**
-
-This page shows all employees' attendance records in one table.
-
-**Columns:** Employee | Date | Department | Clock In | Clock Out | Status | Hours | OT
-
-**Filtering:**
-- Use the **month selector** to change the period.
-- Use the **Department** dropdown to filter.
-- Use the **Employee search** to find a specific person.
-
-**Exporting:**
-Click **Export** to download the filtered records as an Excel file.
-
-[Insert Screenshot: HR Attendance Page]
-
----
-
-## 4. Leave Management and Balance Adjustments
+## 3. Leave Management and Balance Adjustments
 
 ![Leave Balance Adjustments — view and manually adjust balances per employee](/screenshots/hr-leave-balances.png)
 *Leave Balance Adjustments — view and manually adjust balances per employee*
@@ -180,7 +159,7 @@ This page lets you view and manually adjust any employee's leave balance for any
 
 ---
 
-## 5. Approvals
+## 4. Approvals
 
 **Navigation:** Sidebar → **Approvals**
 
@@ -210,7 +189,7 @@ Shows all CTO/CDO conversion requests. Approve or reject per the minimum hour ru
 
 ---
 
-## 6. Reports
+## 5. Reports
 
 ![Reports — generate and export attendance, leave, or overtime reports by date range](/screenshots/hr-reports.png)
 *Reports — generate and export attendance, leave, or overtime reports by date range*
@@ -224,16 +203,17 @@ Generate and export data reports for management and compliance.
 
 | Report | What It Shows |
 |--------|--------------|
-| Attendance | Daily attendance counts by status (On-Site, WFH, OB, Absent) |
+| Attendance | Daily attendance by status (On-Site, WFH, OB, Leave, CTO, CDO, Absent), with optional work-type filter and XLSX export of detailed records |
 | Leave | Daily approved leave counts by type |
 | Overtime | Daily approved overtime counts |
 | Absence | Attendance rate by employee and department |
+| OT Credits | Available overtime credits by employee/department |
 
 **How to Generate a Report:**
 1. Click **Reports** in the sidebar.
-2. Select a **Report Type** tab.
+2. Select a **Report Type** tab (use **Attendance** to monitor system-wide attendance).
 3. Set the **Date Range**. Maximum: 92 days (approximately one quarter).
-4. Optionally filter by **Department** or **Employee**.
+4. Optionally filter by **Department**, **Employee**, or (for Attendance) **Work Type**.
 5. View the **chart** and the **summary table** below it.
 6. Click **Export** to download as an Excel file.
 
@@ -241,7 +221,7 @@ Generate and export data reports for management and compliance.
 
 ---
 
-## 7. Frequently Asked Questions
+## 6. Frequently Asked Questions
 
 **Q: An employee's hours show as negative.**
 A: The clock-out was saved before the clock-in (common with overnight shift corrections filed without the overnight checkbox). Review their attendance and approve a correction with the correct next-day clock-out time.
@@ -256,4 +236,4 @@ A: Leave requests cannot be deleted. Use the balance adjustment tool to correct 
 A: Their account is deactivated and they cannot log in. All historical data (attendance, leave, overtime) remains in the system. They appear in the Archived tab.
 
 **Q: How do I correct an attendance record directly?**
-A: Approve the employee's correction request from the Approvals page. You can also view the HR Attendance page and filter to that employee's records to check.
+A: Approve the employee's correction request from the Approvals page. You can also open **Reports → Attendance**, filter by employee or department, and export detailed records to verify.

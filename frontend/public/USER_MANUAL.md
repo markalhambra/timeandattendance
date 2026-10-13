@@ -6,7 +6,7 @@ This Help guide is tailored to your role and loads automatically when you click 
 
 - **Employee Guide** — Clock In/Out, Attendance, Leave, Overtime, Corrections, Profile
 - **Department Head Guide** — Team Dashboard, Approvals (Leave, OT, Corrections, Conversions)
-- **HR Guide** — Employee Management, Attendance Monitoring, Leave Adjustments, Approvals, Reports
+- **HR Guide** — Employee Management, Leave Adjustments, Approvals, Reports
 - **Administrator Guide** — Departments, Audit Logs, System Settings, and all HR features
 
 ## Quick Tips

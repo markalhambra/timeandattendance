@@ -21,7 +21,6 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Approvals', path: '/dept-head/approvals', icon: '✓', roles: ['DEPARTMENT_HEAD', 'HR', 'ADMIN'] },
   // HR
   { label: 'HR Dashboard', path: '/hr/dashboard', icon: '⊛', roles: ['HR', 'ADMIN'] },
-  { label: 'HR Attendance', path: '/hr/attendance', icon: '▦', roles: ['HR', 'ADMIN'] },
   { label: 'HR Employees', path: '/hr/employees', icon: '◎', roles: ['HR', 'ADMIN'] },
   { label: 'Reports', path: '/hr/reports', icon: '▤', roles: ['HR', 'ADMIN'] },
   { label: 'Leave Management', path: '/hr/leave-management', icon: '◈', roles: ['HR', 'ADMIN'] },

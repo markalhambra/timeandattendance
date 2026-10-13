@@ -208,9 +208,9 @@ Approvals page also shows history sections (where available):
 ### 5.1 HR Navigation
 HR has employee modules plus HR modules:
 - HR Dashboard
-- HR Attendance
 - HR Employees
-- Reports
+- Reports (includes Attendance monitoring and export)
+- Leave Management
 - Team Overview / Approvals (shared with department-head access)
 
 ### 5.2 HR Dashboard
@@ -227,11 +227,11 @@ Filters in schedule summary:
 - Department
 - Type (leave type / CTO / CDO)
 
-### 5.3 HR Attendance Management
-In HR Attendance page, HR can:
-- View all attendance records
-- Filter by month, department, and employee search
-- Export attendance records to XLSX
+### 5.3 Attendance Monitoring (via Reports)
+In **Reports → Attendance**, HR can:
+- View daily attendance summaries and charts by status
+- Filter by date range, department, employee, and work type
+- Export detailed attendance records to XLSX
 
 ### 5.4 HR Employee Master Data
 In HR Employees page, HR can:
@@ -456,7 +456,7 @@ Typical audited actions include:
 ### HR
 - All Employee modules
 - Team Overview and Approvals
-- HR Dashboard, HR Attendance, HR Employees, Reports, Employee Profile management
+- HR Dashboard, HR Employees, Reports (including Attendance), Leave Management, Employee Profile management
 
 ### Admin
 - Full system access
@@ -698,10 +698,10 @@ Filter Schedule Summary by:
 - Department
 - Type (Leave types, CTO, CDO)
 
-## 6.2 HR Attendance Monitoring
-1. Open HR Attendance.
-2. Filter by month, department, and search employee.
-3. Review attendance records across employees.
+## 6.2 Attendance Monitoring (Reports)
+1. Open **Reports** and select the **Attendance** tab.
+2. Set the date range; optionally filter by department, employee, and work type.
+3. Review the chart and daily attendance summary.
 4. Export attendance to XLSX.
 
 ## 6.3 HR Employee Management
@@ -895,10 +895,10 @@ Use this for compliance, investigation, and accountability.
 
 ## HR
 1. HR Dashboard -> monitor workforce status and schedules.
-2. HR Attendance -> review and export attendance.
+2. Reports -> Attendance -> review and export attendance.
 3. HR Employees -> maintain employee records.
 4. Employee Profile -> manage profile picture and documents.
-5. Reports -> generate analytics and export XLSX.
+5. Reports -> generate other analytics (leave, OT, absences, OT credits) and export XLSX.
 
 ## Admin
 1. Admin Dashboard -> system overview and pending totals.
