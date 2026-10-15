@@ -125,7 +125,7 @@ export default function HRPayslipsPage() {
     setLastResult(null);
   }, [year, activeWorkbook?.id, activeWorkbook?.spreadsheetId]);
 
-  const { data: sheetsData, isFetching: sheetsLoading, refetch: refetchSheets } = useQuery({
+  const { data: sheetsData, isFetching: sheetsLoading, refetch: refetchSheets, error: sheetsError } = useQuery({
     queryKey: ['payroll-sheets', year],
     queryFn: () => api.get(`/payroll/workbooks/${year}/sheets`).then((r) => r.data.data),
     enabled: !!activeWorkbook,
@@ -133,13 +133,47 @@ export default function HRPayslipsPage() {
   });
 
   const sheets: SheetInfo[] = sheetsData?.sheets || [];
-  const periodSheets: string[] = sheetsData?.periodSheets || sheets.filter((s) => s.isPeriodSheet).map((s) => s.name);
+  // Prefer period tabs; if filter removes everything, fall back to all tab names so UI is usable
+  const periodSheets: string[] = useMemo(() => {
+    const fromApi = (sheetsData?.periodSheets as string[] | undefined) || [];
+    if (fromApi.length) return fromApi;
+    const flagged = sheets.filter((s) => s.isPeriodSheet).map((s) => s.name);
+    if (flagged.length) return flagged;
+    return sheets.map((s) => s.name);
+  }, [sheetsData?.periodSheets, sheets]);
 
   useEffect(() => {
     if (!sheetsData) return;
-    const def = sheetsData.defaultSheet as string | null;
+    const def = (sheetsData.defaultSheet as string | null) || periodSheets[periodSheets.length - 1] || '';
     if (def) setSheetName(def);
-  }, [sheetsData]);
+  }, [sheetsData, periodSheets]);
+
+  useEffect(() => {
+    if (!sheetsError) return;
+    const err: any = sheetsError;
+    toast.error(err?.response?.data?.message || err?.message || 'Failed to load sheet tabs.');
+  }, [sheetsError]);
+
+  async function handleRefreshTabs() {
+    if (!activeWorkbook) {
+      toast.error('Save the spreadsheet for this year first.');
+      return;
+    }
+    try {
+      const result = await refetchSheets();
+      if (result.error) throw result.error;
+      const data: any = result.data;
+      const n = data?.sheets?.length ?? 0;
+      if (n === 0) {
+        toast.error('Spreadsheet opened but no tabs were found.');
+      } else {
+        const periods = (data?.periodSheets as string[] | undefined)?.length ?? n;
+        toast.success(`Loaded ${n} tab(s)${periods !== n ? ` (${periods} look like cut-offs)` : ''}.`);
+      }
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || err?.message || 'Failed to refresh tabs.');
+    }
+  }
 
   const { data: runs } = useQuery<PayrollRun[]>({
     queryKey: ['payroll-runs'],
@@ -310,8 +344,8 @@ export default function HRPayslipsPage() {
             {saveWorkbook.isPending ? 'Saving…' : 'Save'}
           </button>
           {activeWorkbook && (
-            <button className="btn-secondary text-sm" disabled={sheetsLoading} onClick={() => refetchSheets()}>
-              Refresh tabs
+            <button className="btn-secondary text-sm" disabled={sheetsLoading} onClick={() => void handleRefreshTabs()}>
+              {sheetsLoading ? 'Refreshing…' : 'Refresh tabs'}
             </button>
           )}
         </div>
@@ -319,10 +353,21 @@ export default function HRPayslipsPage() {
         {activeWorkbook ? (
           <p className="text-xs text-gray-500">
             Linked: <span className="font-mono">{activeWorkbook.spreadsheetId}</span>
+            {google?.serviceAccountEmail ? (
+              <>
+                {' '}· Share sheet with{' '}
+                <code className="text-[10px] bg-gray-50 px-1 rounded border">{google.serviceAccountEmail}</code> as Viewer
+              </>
+            ) : null}
           </p>
         ) : (
-          <p className="text-xs text-amber-700">No spreadsheet saved for {year} yet.</p>
+          <p className="text-xs text-amber-700">No spreadsheet saved for {year} yet. Paste the URL and click Save first.</p>
         )}
+        {sheetsError ? (
+          <p className="text-xs text-red-600">
+            {(sheetsError as any)?.response?.data?.message || (sheetsError as any)?.message || 'Could not load tabs.'}
+          </p>
+        ) : null}
       </div>
 
       {/* Cut-off */}
@@ -337,7 +382,7 @@ export default function HRPayslipsPage() {
               onChange={(e) => { setSheetName(e.target.value); setPreview(null); }}
               disabled={!periodSheets.length}
             >
-              {!periodSheets.length && <option value="">No tabs loaded</option>}
+              {!periodSheets.length && <option value="">No tabs loaded — Save + Refresh tabs</option>}
               {periodSheets.map((n) => (
                 <option key={n} value={n}>{n}{sheetsData?.defaultSheet === n ? ' (latest)' : ''}</option>
               ))}
