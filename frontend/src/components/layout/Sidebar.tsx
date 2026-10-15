@@ -24,6 +24,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'HR Employees', path: '/hr/employees', icon: '◎', roles: ['HR', 'ADMIN'] },
   { label: 'Reports', path: '/hr/reports', icon: '▤', roles: ['HR', 'ADMIN'] },
   { label: 'Leave Management', path: '/hr/leave-management', icon: '◈', roles: ['HR', 'ADMIN'] },
+  { label: 'Payslips', path: '/hr/payslips', icon: '₱', roles: ['HR', 'ADMIN'] },
   { label: 'Departments', path: '/admin/departments', icon: '▣', roles: ['HR', 'ADMIN'] },
   { label: 'Audit Logs', path: '/admin/audit', icon: '▧', roles: ['HR', 'ADMIN'] },
   { label: 'Settings', path: '/admin/settings', icon: '⚙', roles: ['ADMIN'] },

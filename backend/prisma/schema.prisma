@@ -186,6 +186,7 @@ model Employee {
   overtimeConversions OvertimeConversion[]
   attendanceCorrections AttendanceCorrection[]
   leaveAdjustments     LeaveAdjustment[]
+  payslips             Payslip[]
 
   @@index([departmentId])
   @@index([isActive, isArchived])
@@ -476,4 +477,77 @@ model SystemSetting {
   createdAt DateTime @default(now())
 
   @@map("system_settings")
+}
+
+// ─────────────────────────────────────────────
+// PAYROLL / PAYSLIPS
+// ─────────────────────────────────────────────
+
+enum PayrollRunStatus {
+  PREVIEWED
+  GENERATED
+  FAILED
+}
+
+model PayrollWorkbook {
+  id             String   @id @default(uuid())
+  year           Int      @unique
+  spreadsheetId  String
+  title          String?
+  isActive       Boolean  @default(true)
+  updatedBy      String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  runs           PayrollRun[]
+
+  @@map("payroll_workbooks")
+}
+
+model PayrollRun {
+  id              String           @id @default(uuid())
+  workbookId      String
+  year            Int
+  sheetName       String
+  periodLabel     String
+  payPeriodStart  DateTime         @db.Date
+  payPeriodEnd    DateTime         @db.Date
+  status          PayrollRunStatus @default(PREVIEWED)
+  matchedCount    Int              @default(0)
+  unmatchedCount  Int              @default(0)
+  generatedCount  Int              @default(0)
+  failedCount     Int              @default(0)
+  unmatchedRows   Json?
+  generatedByUserId String?
+  createdAt       DateTime         @default(now())
+
+  workbook        PayrollWorkbook  @relation(fields: [workbookId], references: [id], onDelete: Cascade)
+  payslips        Payslip[]
+
+  @@index([year, createdAt])
+  @@map("payroll_runs")
+}
+
+model Payslip {
+  id              String   @id @default(uuid())
+  employeeId      String
+  payrollRunId    String?
+  year            Int
+  sheetName       String
+  periodLabel     String
+  payPeriodStart  DateTime @db.Date
+  payPeriodEnd    DateTime @db.Date
+  netPay          Decimal? @db.Decimal(14, 2)
+  storagePath     String
+  filename        String
+  mimeType        String   @default("application/pdf")
+  size            Int
+  createdAt       DateTime @default(now())
+
+  employee        Employee    @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  payrollRun      PayrollRun? @relation(fields: [payrollRunId], references: [id], onDelete: SetNull)
+
+  @@unique([employeeId, payPeriodStart, payPeriodEnd])
+  @@index([employeeId, payPeriodEnd])
+  @@map("payslips")
 }
