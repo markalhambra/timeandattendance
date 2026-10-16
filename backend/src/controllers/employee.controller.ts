@@ -9,7 +9,12 @@ import crypto from 'crypto';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import XLSX from 'xlsx';
-import { getHeadedDepartmentIds } from '../utils/departmentHead';
+import {
+  clearAllHeadships,
+  ensureHomeDepartmentHead,
+  getHeadedDepartmentIds,
+  syncDepartmentHeadRoleFromHeadships,
+} from '../utils/departmentHead';
 import { hasAnyRole, resolveUserRoles } from '../utils/roles';
 
 export async function getMyProfile(req: AuthRequest, res: Response): Promise<void> {
@@ -164,12 +169,9 @@ export async function createEmployee(req: AuthRequest, res: Response): Promise<v
       ],
     });
 
-    // If created as department head, link them to their department
+    // Strict tally: DH role → head of home department (demotes previous head if needed)
     if (resolved.roles.includes('DEPARTMENT_HEAD') && departmentId) {
-      await prisma.department.update({
-        where: { id: departmentId },
-        data: { headId: user.id },
-      });
+      await ensureHomeDepartmentHead(user.id, departmentId);
     }
 
     res.status(201).json({
@@ -255,11 +257,13 @@ export async function updateEmployee(req: AuthRequest, res: Response): Promise<v
 
     // Sync roles and/or email on the user record
     const userUpdates: Record<string, unknown> = {};
-    let effectiveRoles: string[] = (existing.user.roles && existing.user.roles.length)
+    const previousRoles: string[] = (existing.user.roles && existing.user.roles.length)
       ? existing.user.roles
       : [existing.user.role];
+    let effectiveRoles: string[] = previousRoles;
+    const rolesChanged = roles != null || role != null;
 
-    if (roles != null || role != null) {
+    if (rolesChanged) {
       const resolved = resolveUserRoles({
         roles: roles != null ? roles : undefined,
         role: roles == null ? role : undefined,
@@ -273,14 +277,21 @@ export async function updateEmployee(req: AuthRequest, res: Response): Promise<v
       await prisma.user.update({ where: { id: existing.userId }, data: userUpdates });
     }
 
-    // If DEPARTMENT_HEAD and home dept set, ensure they are head of home dept only
-    // (do not clear other departments they already head — multi-dept approvers allowed)
-    const targetDeptId = departmentId || existing.departmentId;
-    if (effectiveRoles.includes('DEPARTMENT_HEAD') && targetDeptId) {
-      await prisma.department.update({
-        where: { id: targetDeptId },
-        data: { headId: existing.userId },
-      });
+    // Strict tally DEPARTMENT_HEAD ↔ headId
+    const hadDh = previousRoles.includes('DEPARTMENT_HEAD');
+    const hasDh = effectiveRoles.includes('DEPARTMENT_HEAD');
+    const targetDeptId = (departmentId !== undefined ? departmentId : existing.departmentId) as string | null | undefined;
+
+    if (hadDh && !hasDh) {
+      // Role removed → clear all headships and drop DH (already dropped in roles)
+      await clearAllHeadships(existing.userId);
+    } else if (hasDh && targetDeptId) {
+      // Role kept/added → ensure head of home department; demote replaced head if needed
+      // Multi-dept headships from Assign Head are preserved
+      await ensureHomeDepartmentHead(existing.userId, targetDeptId);
+    } else if (hasDh && !targetDeptId) {
+      // DH role but no home department — keep multi-dept headships; ensure role matches headships
+      await syncDepartmentHeadRoleFromHeadships(existing.userId);
     }
 
     res.json({ success: true, data: employee });
@@ -294,7 +305,8 @@ export async function deleteEmployee(req: AuthRequest, res: Response): Promise<v
     const employee = await prisma.employee.findUnique({ where: { id: req.params.id } });
     if (!employee) { res.status(404).json({ success: false, message: 'Employee not found.' }); return; }
 
-    // Soft-delete: deactivate both records and revoke tokens to force logout
+    // Soft-delete: clear headships + DH role, deactivate, revoke tokens
+    await clearAllHeadships(employee.userId);
     await Promise.all([
       prisma.employee.update({ where: { id: req.params.id }, data: { isActive: false } }),
       prisma.user.update({ where: { id: employee.userId }, data: { isActive: false, refreshToken: null } }),
@@ -311,9 +323,14 @@ export async function toggleActive(req: AuthRequest, res: Response): Promise<voi
     const employee = await prisma.employee.findUnique({ where: { id: req.params.id } });
     if (!employee) { res.status(404).json({ success: false, message: 'Employee not found.' }); return; }
     if (employee.isArchived) { res.status(400).json({ success: false, message: 'Archived employees cannot be reactivated. Restore them first.' }); return; }
+    const nextActive = !employee.isActive;
+    // Deactivating: clear headships so role/headId stay in tally
+    if (!nextActive) {
+      await clearAllHeadships(employee.userId);
+    }
     await Promise.all([
-      prisma.employee.update({ where: { id: req.params.id }, data: { isActive: !employee.isActive } }),
-      prisma.user.update({ where: { id: employee.userId }, data: { isActive: !employee.isActive } }),
+      prisma.employee.update({ where: { id: req.params.id }, data: { isActive: nextActive } }),
+      prisma.user.update({ where: { id: employee.userId }, data: { isActive: nextActive } }),
     ]);
     res.json({ success: true, message: `Employee ${employee.isActive ? 'deactivated' : 'activated'}.` });
   } catch {
@@ -326,6 +343,7 @@ export async function archiveEmployee(req: AuthRequest, res: Response): Promise<
     const employee = await prisma.employee.findUnique({ where: { id: req.params.id } });
     if (!employee) { res.status(404).json({ success: false, message: 'Employee not found.' }); return; }
     if (employee.isArchived) { res.status(400).json({ success: false, message: 'Employee is already archived.' }); return; }
+    await clearAllHeadships(employee.userId);
     await Promise.all([
       prisma.employee.update({ where: { id: req.params.id }, data: { isArchived: true, isActive: false, resignedAt: new Date() } }),
       prisma.user.update({ where: { id: employee.userId }, data: { isActive: false, refreshToken: null } }),
@@ -732,7 +750,7 @@ export async function importEmployees(req: AuthRequest, res: Response): Promise<
           ],
         });
         if (resolvedImport.roles.includes('DEPARTMENT_HEAD') && departmentId) {
-          await prisma.department.update({ where: { id: departmentId }, data: { headId: user.id } });
+          await ensureHomeDepartmentHead(user.id, departmentId);
         }
 
         results.created++;

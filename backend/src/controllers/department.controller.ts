@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth.middleware';
 import { prisma } from '../config/database';
+import { setDepartmentHead, syncDepartmentHeadRoleFromHeadships } from '../utils/departmentHead';
 
 export async function getDepartments(_req: AuthRequest, res: Response): Promise<void> {
   try {
@@ -57,36 +58,37 @@ export async function deleteDepartment(req: AuthRequest, res: Response): Promise
       res.status(400).json({ success: false, message: 'Cannot delete a department with active employees.' });
       return;
     }
+    const existing = await prisma.department.findUnique({
+      where: { id: req.params.id },
+      select: { headId: true },
+    });
     // Null out departmentId for any inactive employees still referencing this department
     await prisma.employee.updateMany({ where: { departmentId: req.params.id }, data: { departmentId: null } });
-    // Clear headId before deletion
+    // Clear headId before deletion, then tally former head's DEPARTMENT_HEAD role
     await prisma.department.update({ where: { id: req.params.id }, data: { headId: null } });
     await prisma.department.delete({ where: { id: req.params.id } });
+    if (existing?.headId) {
+      await syncDepartmentHeadRoleFromHeadships(existing.headId);
+    }
     res.json({ success: true, message: 'Department deleted.' });
   } catch {
     res.status(500).json({ success: false, message: 'Failed to delete department.' });
   }
 }
 
-export async function assignHead(req: AuthRequest, res: Response): Promise<void> {  const { userId } = req.body;
+export async function assignHead(req: AuthRequest, res: Response): Promise<void> {
+  const { userId } = req.body;
   try {
-    const dept = await prisma.department.update({
+    const nextHeadId = userId === null || userId === undefined || userId === ''
+      ? null
+      : String(userId);
+
+    await setDepartmentHead(req.params.id, nextHeadId);
+
+    const dept = await prisma.department.findUnique({
       where: { id: req.params.id },
-      data: { headId: userId },
       include: { head: { select: { employee: { select: { firstName: true, lastName: true } } } } },
     });
-
-    if (userId) {
-      const u = await prisma.user.findUnique({ where: { id: userId }, select: { role: true, roles: true } });
-      if (u) {
-        const { addRoles } = await import('../utils/roles');
-        const resolved = addRoles(u.roles?.length ? u.roles : [u.role], 'DEPARTMENT_HEAD');
-        await prisma.user.update({
-          where: { id: userId },
-          data: { role: resolved.role, roles: resolved.roles },
-        });
-      }
-    }
 
     res.json({ success: true, data: dept });
   } catch {

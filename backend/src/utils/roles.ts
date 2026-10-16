@@ -78,6 +78,16 @@ export function addRoles(existing: string[] | null | undefined, ...toAdd: string
   return resolveUserRoles({ roles: [...(existing || []), ...toAdd] });
 }
 
+/** Remove role(s); if nothing left, defaults to EMPLOYEE. */
+export function removeRoles(existing: string[] | null | undefined, ...toRemove: string[]): {
+  roles: Role[];
+  role: Role;
+} {
+  const remove = new Set(toRemove.map((r) => String(r).trim().toUpperCase()));
+  const kept = (existing || []).filter((r) => !remove.has(String(r).trim().toUpperCase()));
+  return resolveUserRoles({ roles: kept.length ? kept : ['EMPLOYEE'] });
+}
+
 export function getUserRoles(user: RoleLike | null | undefined): string[] {
   if (!user) return [];
   if (user.roles && user.roles.length) return user.roles;
