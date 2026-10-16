@@ -12,7 +12,7 @@ overtimeRoutes.patch('/:id/file', auditLog('UPDATE', 'OvertimeRecord'), overtime
 overtimeRoutes.post('/convert', auditLog('CREATE', 'OvertimeConversion'), overtimeController.convertOvertime);
 overtimeRoutes.get('/conversions/my', overtimeController.getMyConversions);
 
-overtimeRoutes.get('/', authorize('DEPARTMENT_HEAD', 'HR', 'ADMIN'), overtimeController.getAllOvertime);
-overtimeRoutes.patch('/:id/review', authorize('DEPARTMENT_HEAD', 'HR', 'ADMIN'), overtimeController.reviewOvertime);
-overtimeRoutes.get('/conversions', authorize('DEPARTMENT_HEAD', 'HR', 'ADMIN'), overtimeController.getConversions);
-overtimeRoutes.patch('/conversions/:id/review', authorize('DEPARTMENT_HEAD', 'HR', 'ADMIN'), overtimeController.reviewConversion);
+overtimeRoutes.get('/', authorize('DEPARTMENT_HEAD', 'MANAGING_DIRECTOR', 'HR', 'ADMIN'), overtimeController.getAllOvertime);
+overtimeRoutes.patch('/:id/review', authorize('DEPARTMENT_HEAD', 'MANAGING_DIRECTOR', 'HR', 'ADMIN'), overtimeController.reviewOvertime);
+overtimeRoutes.get('/conversions', authorize('DEPARTMENT_HEAD', 'MANAGING_DIRECTOR', 'HR', 'ADMIN'), overtimeController.getConversions);
+overtimeRoutes.patch('/conversions/:id/review', authorize('DEPARTMENT_HEAD', 'MANAGING_DIRECTOR', 'HR', 'ADMIN'), overtimeController.reviewConversion);

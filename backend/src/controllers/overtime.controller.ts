@@ -3,8 +3,9 @@ import { AuthRequest } from '../middleware/auth.middleware';
 import { prisma } from '../config/database';
 import { ApprovalStatus, OvertimeConversionType } from '@prisma/client';
 import { notificationService } from '../services/notification.service';
-import { getHeadedDepartmentIds } from '../utils/departmentHead';
+import { canReviewAsDeptTier, getApprovalEmployeeWhere, getHeadedDepartmentIds } from '../utils/departmentHead';
 import { getReviewerLabel } from '../utils/reviewerLabel';
+import { hasAnyRole, isHrOrAdmin } from '../utils/roles';
 
 const CTO_MIN_MINUTES = 4 * 60;  // 4 hours
 const CDO_MIN_MINUTES = 8 * 60;  // 8 hours
@@ -258,11 +259,14 @@ export async function getAllOvertime(req: AuthRequest, res: Response): Promise<v
     if (status) where.status = status;
     // Always filter to formally filed records only — drafts are private to the employee
     where.isFiled = true;
-    if (req.user!.role === 'DEPARTMENT_HEAD') {
-      const headedIds = await getHeadedDepartmentIds(req.user!.sub);
-      if (!headedIds.length) { res.json({ success: true, data: [], meta: { total: 0 } }); return; }
-      // Exclude the dept head's own overtime — those go to HR
-      where.employee = { departmentId: { in: headedIds }, userId: { not: req.user!.sub } };
+    if (!isHrOrAdmin(req.user) && hasAnyRole(req.user, 'DEPARTMENT_HEAD', 'MANAGING_DIRECTOR')) {
+      const empWhere = await getApprovalEmployeeWhere({
+        userId: req.user!.sub,
+        isDeptHead: hasAnyRole(req.user, 'DEPARTMENT_HEAD'),
+        isManagingDirector: hasAnyRole(req.user, 'MANAGING_DIRECTOR'),
+      });
+      if (!empWhere) { res.json({ success: true, data: [], meta: { total: 0 } }); return; }
+      where.employee = empWhere;
     } else if (departmentId) {
       where.employee = { departmentId };
     }
@@ -293,22 +297,31 @@ export async function reviewOvertime(req: AuthRequest, res: Response): Promise<v
   }
 
   try {
-    // Ensure dept head only reviews headed departments' overtime, and not their own
-    if (req.user!.role === 'DEPARTMENT_HEAD') {
-      const headedIds = await getHeadedDepartmentIds(req.user!.sub);
-      const record = await prisma.overtimeRecord.findUnique({ where: { id }, include: { employee: true } });
-      if (!record || !record.employee.departmentId || !headedIds.includes(record.employee.departmentId)) {
-        res.status(403).json({ success: false, message: 'You can only review overtime from your department.' }); return;
-      }
+    const record = await prisma.overtimeRecord.findUnique({ where: { id }, include: { employee: true } });
+    if (!record) {
+      res.status(404).json({ success: false, message: 'Overtime not found.' }); return;
+    }
+
+    // Ensure dept head / MD only reviews within scope, and not their own
+    if (!isHrOrAdmin(req.user) && hasAnyRole(req.user, 'DEPARTMENT_HEAD', 'MANAGING_DIRECTOR')) {
       if (record.employee.userId === req.user!.sub) {
         res.status(403).json({ success: false, message: 'You cannot approve your own overtime. Please contact HR.' }); return;
+      }
+      const allowed = await canReviewAsDeptTier({
+        reviewerUserId: req.user!.sub,
+        employeeUserId: record.employee.userId,
+        employeeDepartmentId: record.employee.departmentId,
+        isDeptHead: hasAnyRole(req.user, 'DEPARTMENT_HEAD'),
+        isManagingDirector: hasAnyRole(req.user, 'MANAGING_DIRECTOR'),
+      });
+      if (!allowed) {
+        res.status(403).json({ success: false, message: 'You can only review overtime within your approval scope.' }); return;
       }
     }
 
     // HR/Admin cannot approve their own overtime
-    if (req.user!.role === 'HR' || req.user!.role === 'ADMIN') {
-      const record = await prisma.overtimeRecord.findUnique({ where: { id }, select: { employeeId: true } });
-      if (record?.employeeId === req.user!.employeeId) {
+    if (isHrOrAdmin(req.user)) {
+      if (record.employeeId === req.user!.employeeId) {
         res.status(403).json({ success: false, message: 'You cannot approve your own request.' }); return;
       }
     }
@@ -335,7 +348,11 @@ export async function reviewOvertime(req: AuthRequest, res: Response): Promise<v
     await notificationService.notifyEmployee(overtime.employeeId, 'APPROVAL_RESULT', {
       type: 'Overtime Request',
       status,
-      reviewer: req.user!.role === 'DEPARTMENT_HEAD' ? 'Department Head' : req.user!.role,
+      reviewer: hasAnyRole(req.user, 'MANAGING_DIRECTOR') && !hasAnyRole(req.user, 'DEPARTMENT_HEAD')
+        ? 'Managing Director'
+        : hasAnyRole(req.user, 'DEPARTMENT_HEAD')
+          ? 'Department Head'
+          : req.user!.role,
     }, await getReviewerLabel(req.user!.sub, req.user!.role));
 
     prisma.auditLog.create({
@@ -359,15 +376,17 @@ export async function getConversions(req: AuthRequest, res: Response): Promise<v
   const { status, departmentId, conversionType, page = '1', limit = '50' } = req.query as Record<string, string>;
   const skip = (parseInt(page) - 1) * parseInt(limit);
   try {
-    const role = req.user!.role;
     const where: any = {};
     if (status) where.status = status;
     if (conversionType) where.conversionType = conversionType;
-    // Dept head: scoped to headed departments; HR/Admin: all employees
-    if (role === 'DEPARTMENT_HEAD') {
-      const headedIds = await getHeadedDepartmentIds(req.user!.sub);
-      // Exclude the dept head's own conversions — those go to HR
-      if (headedIds.length) where.employee = { departmentId: { in: headedIds }, userId: { not: req.user!.sub } };
+    // Dept head / MD: scoped; HR/Admin: all employees
+    if (!isHrOrAdmin(req.user) && hasAnyRole(req.user, 'DEPARTMENT_HEAD', 'MANAGING_DIRECTOR')) {
+      const empWhere = await getApprovalEmployeeWhere({
+        userId: req.user!.sub,
+        isDeptHead: hasAnyRole(req.user, 'DEPARTMENT_HEAD'),
+        isManagingDirector: hasAnyRole(req.user, 'MANAGING_DIRECTOR'),
+      });
+      if (empWhere) where.employee = empWhere;
       else where.employee = { departmentId: { in: [] } };
     } else if (departmentId) {
       where.employee = { departmentId };
@@ -403,19 +422,25 @@ export async function reviewConversion(req: AuthRequest, res: Response): Promise
 
     const role = req.user!.role;
 
-    // Dept head: scoped to headed departments only, and cannot approve their own
-    if (role === 'DEPARTMENT_HEAD') {
-      const headedIds = await getHeadedDepartmentIds(req.user!.sub);
-      if (!existing.employee.departmentId || !headedIds.includes(existing.employee.departmentId)) {
-        res.status(403).json({ success: false, message: 'You can only review conversions from your department.' }); return;
-      }
+    // Dept head / MD: scoped, cannot approve own
+    if (!isHrOrAdmin(req.user) && hasAnyRole(req.user, 'DEPARTMENT_HEAD', 'MANAGING_DIRECTOR')) {
       if (existing.employee.userId === req.user!.sub) {
         res.status(403).json({ success: false, message: 'You cannot approve your own conversion. Please contact HR.' }); return;
+      }
+      const allowed = await canReviewAsDeptTier({
+        reviewerUserId: req.user!.sub,
+        employeeUserId: existing.employee.userId,
+        employeeDepartmentId: existing.employee.departmentId,
+        isDeptHead: hasAnyRole(req.user, 'DEPARTMENT_HEAD'),
+        isManagingDirector: hasAnyRole(req.user, 'MANAGING_DIRECTOR'),
+      });
+      if (!allowed) {
+        res.status(403).json({ success: false, message: 'You can only review conversions within your approval scope.' }); return;
       }
     }
 
     // HR/Admin cannot approve their own conversion request
-    if ((role === 'HR' || role === 'ADMIN') && existing.employeeId === req.user!.employeeId) {
+    if (isHrOrAdmin(req.user) && existing.employeeId === req.user!.employeeId) {
       res.status(403).json({ success: false, message: 'You cannot approve your own request.' }); return;
     }
 
@@ -424,10 +449,10 @@ export async function reviewConversion(req: AuthRequest, res: Response): Promise
       status: status as ApprovalStatus,
       reviewerNotes: notes,
     };
-    if (role === 'DEPARTMENT_HEAD') {
+    if (hasAnyRole(req.user, 'DEPARTMENT_HEAD', 'MANAGING_DIRECTOR') && !isHrOrAdmin(req.user)) {
       updateData.deptHeadStatus = status as ApprovalStatus;
       updateData.deptHeadAt = new Date();
-    } else if (role === 'HR') {
+    } else if (hasAnyRole(req.user, 'HR') && !hasAnyRole(req.user, 'ADMIN')) {
       updateData.hrStatus = status as ApprovalStatus;
       updateData.hrAt = new Date();
     } else {
@@ -449,11 +474,20 @@ export async function reviewConversion(req: AuthRequest, res: Response): Promise
     }
     // On REJECTED: credits untouched at submission — nothing to restore.
 
+    const reviewerLabelRole = hasAnyRole(req.user, 'MANAGING_DIRECTOR') && !hasAnyRole(req.user, 'DEPARTMENT_HEAD')
+      ? 'MANAGING_DIRECTOR'
+      : hasAnyRole(req.user, 'DEPARTMENT_HEAD')
+        ? 'DEPARTMENT_HEAD'
+        : role;
     await notificationService.notifyEmployee(conversion.employeeId, 'APPROVAL_RESULT', {
       type: `${conversion.conversionType} Conversion`,
       status,
-      reviewer: role === 'DEPARTMENT_HEAD' ? 'Department Head' : role,
-    }, await getReviewerLabel(req.user!.sub, role));
+      reviewer: reviewerLabelRole === 'DEPARTMENT_HEAD'
+        ? 'Department Head'
+        : reviewerLabelRole === 'MANAGING_DIRECTOR'
+          ? 'Managing Director'
+          : role,
+    }, await getReviewerLabel(req.user!.sub, reviewerLabelRole));
 
     prisma.auditLog.create({
       data: {

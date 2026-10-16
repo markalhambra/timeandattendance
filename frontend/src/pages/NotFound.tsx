@@ -1,9 +1,10 @@
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { homePathForRoles } from '../utils/roles';
 
 export default function NotFound() {
   const { user } = useAuth();
-  const home = user ? `/${user.role.toLowerCase().replace('_', '-')}` : '/login';
+  const home = user ? homePathForRoles(user) : '/login';
 
   return (
     <div className="min-h-screen bg-white flex flex-col items-center justify-center p-8 text-center">

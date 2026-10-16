@@ -3,6 +3,7 @@ import { prisma } from '../config/database';
 import { NotificationType } from '@prisma/client';
 import { logger } from '../config/logger';
 import { settingsService } from './settings.service';
+import { hasAnyRole } from '../utils/roles';
 
 const SMTP_PORT = parseInt(process.env.SMTP_PORT || '587');
 
@@ -217,14 +218,15 @@ export const notificationService = {
           const title = titles[type] || 'New Request';
           const message = `${fullName} (Department Head) has submitted a new request.`;
           const designatedId = await settingsService.getDeptHeadApproverUserId();
-          let notifiedDesignated = false;
+          const notifiedIds = new Set<string>();
 
+          // 1) Designated HR/Admin approver (settings) — multi-role aware
           if (designatedId) {
             const designated = await prisma.user.findUnique({
               where: { id: designatedId },
-              select: { id: true, email: true, role: true, isActive: true },
+              select: { id: true, email: true, role: true, roles: true, isActive: true },
             });
-            if (designated?.isActive && ['HR', 'ADMIN'].includes(designated.role)) {
+            if (designated?.isActive && hasAnyRole(designated, 'HR', 'ADMIN')) {
               await this.createNotification(designated.id, type, title, message, data);
               if (typeName && designated.email) {
                 await this.sendEmail(
@@ -233,15 +235,43 @@ export const notificationService = {
                   requestEmail(fullName, typeName, date, `${APP_URL}/hr`),
                 );
               }
-              notifiedDesignated = true;
+              notifiedIds.add(designated.id);
             }
           }
 
-          if (!notifiedDesignated) {
+          // 2) All Managing Directors (DH-filed requests go to MD tier)
+          const mds = await prisma.user.findMany({
+            where: {
+              isActive: true,
+              OR: [
+                { role: 'MANAGING_DIRECTOR' },
+                { roles: { has: 'MANAGING_DIRECTOR' } },
+              ],
+            },
+            select: { id: true, email: true },
+          });
+          for (const md of mds) {
+            if (notifiedIds.has(md.id) || md.id === employee.userId) continue;
+            await this.createNotification(md.id, type, title, message, data);
+            if (typeName && md.email) {
+              await this.sendEmail(
+                md.email,
+                `${title} — ${fullName} — ALPAS TAMS`,
+                requestEmail(fullName, typeName, date, `${APP_URL}/dept-head/approvals`),
+              );
+            }
+            notifiedIds.add(md.id);
+          }
+
+          // 3) Fallback to all HR if nobody designated/MD was notified
+          if (!notifiedIds.size) {
             await this.notifyHR(type, title, message, data);
             if (typeName) {
               const hrUsers = await prisma.user.findMany({
-                where: { role: 'HR', isActive: true },
+                where: {
+                  isActive: true,
+                  OR: [{ role: 'HR' }, { roles: { has: 'HR' } }],
+                },
                 select: { email: true },
               });
               for (const hr of hrUsers) {
@@ -314,7 +344,12 @@ export const notificationService = {
 
   async notifyHR(type: NotificationType, title: string, message: string, data?: object): Promise<void> {
     try {
-      const hrUsers = await prisma.user.findMany({ where: { role: 'HR', isActive: true } });
+      const hrUsers = await prisma.user.findMany({
+        where: {
+          isActive: true,
+          OR: [{ role: 'HR' }, { roles: { has: 'HR' } }],
+        },
+      });
       for (const hr of hrUsers) {
         await this.createNotification(hr.id, type, title, message, data);
       }

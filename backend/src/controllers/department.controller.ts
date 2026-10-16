@@ -77,7 +77,15 @@ export async function assignHead(req: AuthRequest, res: Response): Promise<void>
     });
 
     if (userId) {
-      await prisma.user.update({ where: { id: userId }, data: { role: 'DEPARTMENT_HEAD' } });
+      const u = await prisma.user.findUnique({ where: { id: userId }, select: { role: true, roles: true } });
+      if (u) {
+        const { addRoles } = await import('../utils/roles');
+        const resolved = addRoles(u.roles?.length ? u.roles : [u.role], 'DEPARTMENT_HEAD');
+        await prisma.user.update({
+          where: { id: userId },
+          data: { role: resolved.role, roles: resolved.roles },
+        });
+      }
     }
 
     res.json({ success: true, data: dept });

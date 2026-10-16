@@ -8,11 +8,20 @@ import toast from 'react-hot-toast';
 const EMPTY_FORM = {
   firstName: '', lastName: '', middleName: '', nickname: '', email: '',
   mobile: '', address: '', designation: '', departmentId: '',
-  dateHired: '', role: 'EMPLOYEE' as Role,
+  dateHired: '', role: 'EMPLOYEE' as Role, roles: ['EMPLOYEE'] as Role[],
   gender: '', birthday: '', emergencyContact: '', emergencyContactNumber: '',
   sssNumber: '', pagibigNumber: '', philhealthNumber: '', tinNumber: '',
   employmentType: 'REGULAR' as EmploymentType,
 };
+
+const ROLE_OPTIONS: { value: Role; label: string }[] = [
+  { value: 'EMPLOYEE', label: 'Employee' },
+  { value: 'DEPARTMENT_HEAD', label: 'Department Head' },
+  { value: 'HR', label: 'HR' },
+  { value: 'ADMIN', label: 'Admin' },
+  { value: 'PAYROLL', label: 'Payroll' },
+  { value: 'MANAGING_DIRECTOR', label: 'Managing Director' },
+];
 
 type Modal = 'none' | 'add' | 'edit' | 'resetPw' | 'importResult';
 
@@ -166,6 +175,7 @@ export default function AdminEmployees() {
       designation: e.designation ?? '', departmentId: e.departmentId ?? '',
       dateHired: e.dateHired ? e.dateHired.slice(0, 10) : '',
       role: (e.user?.role ?? 'EMPLOYEE') as Role,
+      roles: ((e.user?.roles?.length ? e.user.roles : [e.user?.role ?? 'EMPLOYEE']) as Role[]),
       gender: e.gender ?? '', birthday: e.birthday ? e.birthday.slice(0, 10) : '',
       emergencyContact: e.emergencyContact ?? '', emergencyContactNumber: e.emergencyContactNumber ?? '',
       sssNumber: e.sssNumber ?? '', pagibigNumber: e.pagibigNumber ?? '',
@@ -267,7 +277,7 @@ export default function AdminEmployees() {
                       <td className="table-cell font-mono text-xs">{e.employeeNumber}</td>
                       <td className="table-cell text-sm text-gray-500">{e.department?.name ?? '—'}</td>
                       <td className="table-cell text-sm text-gray-500">{e.designation ?? '—'}</td>
-                      <td className="table-cell text-xs">{e.user?.role?.replace(/_/g, ' ') ?? '—'}</td>
+                      <td className="table-cell text-xs">{(e.user?.roles?.length ? e.user.roles : e.user?.role ? [e.user.role] : []).map((r) => r.replace(/_/g, ' ')).join(', ') || '—'}</td>
                       <td className="table-cell text-sm">{e.dateHired ? format(parseISO(e.dateHired), 'MMM d, yyyy') : '—'}</td>
                       <td className="table-cell">
                         <span className={`badge ${e.isActive ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'}`}>
@@ -357,15 +367,32 @@ export default function AdminEmployees() {
                   {depts?.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
                 </select>
               </div>
-              <div>
-                <label className="label">Role</label>
-                <select className="input" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as Role })}>
-                  <option value="EMPLOYEE">Employee</option>
-                  <option value="DEPARTMENT_HEAD">Department Head</option>
-                  <option value="HR">HR</option>
-                  <option value="ADMIN">Admin</option>
-                </select>
-              </div>
+                <div>
+                <label className="label">Roles</label>
+                <div className="grid grid-cols-2 gap-2 border border-gray-200 rounded-lg p-3">
+                  {ROLE_OPTIONS.map((opt) => {
+                    const checked = (form.roles || []).includes(opt.value);
+                    return (
+                      <label key={opt.value} className="flex items-center gap-2 text-sm cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(e) => {
+                            const next = new Set(form.roles || []);
+                            if (e.target.checked) next.add(opt.value);
+                            else next.delete(opt.value);
+                            const roles = Array.from(next) as Role[];
+                            setForm({ ...form, roles: roles.length ? roles : ['EMPLOYEE'], role: (roles[0] || 'EMPLOYEE') as Role });
+                          }}
+                        />
+                        <span>{opt.label}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+                <p className="text-[11px] text-gray-400 mt-1">Select one or more roles. Payroll-only users only see Payslips.</p>
+                </div>
+
               <div>
                 <label className="label">Date Hired *</label>
                 <input type="date" className="input" value={form.dateHired} onChange={(e) => setForm({ ...form, dateHired: e.target.value })} />

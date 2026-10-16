@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../contexts/AuthContext';
+import { formatRoles } from '../../utils/roles';
 import api from '../../services/api';
 import { Notification } from '../../types';
 import { formatDistanceToNow } from 'date-fns';
@@ -139,7 +140,7 @@ export default function Header({ onMenuClick }: Props) {
             <div className="text-xs font-semibold leading-tight">
               {user?.employee ? `${user.employee.firstName} ${user.employee.lastName}` : user?.email}
             </div>
-            <div className="text-[10px] text-gray-400">{user?.role?.replace('_', ' ')}</div>
+            <div className="text-[10px] text-gray-400">{formatRoles(user)}</div>
           </div>
           {user?.employee?.profilePicture ? (
             <img src={user.employee.profilePicture} alt="" className="w-8 h-8 rounded-full object-cover border border-gray-200" />

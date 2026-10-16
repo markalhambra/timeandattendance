@@ -20,6 +20,8 @@ enum Role {
   DEPARTMENT_HEAD
   HR
   ADMIN
+  PAYROLL
+  MANAGING_DIRECTOR
 }
 
 enum AttendanceStatus {
@@ -125,7 +127,10 @@ model User {
   id                    String    @id @default(uuid())
   email                 String    @unique
   password              String
+  /// Primary/display role (highest privilege). Source of truth for auth is `roles`.
   role                  Role      @default(EMPLOYEE)
+  /// All assigned roles (multi-role). Always non-empty after backfill.
+  roles                 Role[]    @default([EMPLOYEE])
   isActive              Boolean   @default(true)
   failedLoginAttempts   Int       @default(0)
   lockedAt              DateTime?

@@ -9,7 +9,10 @@ if (!JWT_SECRET || !JWT_REFRESH_SECRET) {
 
 export interface JwtPayload {
   sub: string;      // userId
+  /** Primary/display role (highest privilege). */
   role: string;
+  /** All assigned roles — source of truth for authorize(). */
+  roles?: string[];
   employeeId?: string;
   departmentId?: string; // cached from employee.departmentId — avoids per-request DB lookup
   iat?: number;

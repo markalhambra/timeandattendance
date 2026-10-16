@@ -12,8 +12,8 @@ leaveRoutes.get('/balances', leaveController.getMyBalances);
 leaveRoutes.get('/calendar', leaveController.getLeaveCalendar);
 leaveRoutes.delete('/:id', auditLog('DELETE', 'LeaveRequest'), leaveController.cancelLeave);
 
-leaveRoutes.get('/', authorize('DEPARTMENT_HEAD', 'HR', 'ADMIN'), leaveController.getAllLeaves);
-leaveRoutes.patch('/:id/review', authorize('DEPARTMENT_HEAD', 'HR', 'ADMIN'), leaveController.reviewLeave);
+leaveRoutes.get('/', authorize('DEPARTMENT_HEAD', 'MANAGING_DIRECTOR', 'HR', 'ADMIN'), leaveController.getAllLeaves);
+leaveRoutes.patch('/:id/review', authorize('DEPARTMENT_HEAD', 'MANAGING_DIRECTOR', 'HR', 'ADMIN'), leaveController.reviewLeave);
 
 // HR Leave Management
 leaveRoutes.get('/adjustments', authorize('HR', 'ADMIN'), leaveController.getLeaveAdjustments);

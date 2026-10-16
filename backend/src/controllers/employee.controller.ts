@@ -10,12 +10,13 @@ import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import XLSX from 'xlsx';
 import { getHeadedDepartmentIds } from '../utils/departmentHead';
+import { hasAnyRole, resolveUserRoles } from '../utils/roles';
 
 export async function getMyProfile(req: AuthRequest, res: Response): Promise<void> {
   try {
     const employee = await prisma.employee.findUnique({
       where: { userId: req.user!.sub },
-      include: { department: true, user: { select: { email: true, role: true, lastLogin: true, isActive: true, lockedAt: true, failedLoginAttempts: true } } },
+      include: { department: true, user: { select: { email: true, role: true, roles: true, lastLogin: true, isActive: true, lockedAt: true, failedLoginAttempts: true } } },
     });
     if (!employee) { res.status(404).json({ success: false, message: 'Profile not found.' }); return; }
     res.json({ success: true, data: employee });
@@ -52,7 +53,7 @@ export async function getEmployees(req: AuthRequest, res: Response): Promise<voi
       where.isArchived = false;
       if (isActive !== undefined) where.isActive = isActive === 'true';
     }
-    if (req.user!.role === 'DEPARTMENT_HEAD') {
+    if (hasAnyRole(req.user, 'DEPARTMENT_HEAD') && !hasAnyRole(req.user, 'HR', 'ADMIN')) {
       const headedIds = await getHeadedDepartmentIds(req.user!.sub);
       if (headedIds.length) where.departmentId = { in: headedIds };
       else where.departmentId = { in: [] };
@@ -71,7 +72,7 @@ export async function getEmployees(req: AuthRequest, res: Response): Promise<voi
     const [employees, total] = await Promise.all([
       prisma.employee.findMany({
         where,
-        include: { department: true, user: { select: { id: true, email: true, role: true, isActive: true, lastLogin: true, lockedAt: true, failedLoginAttempts: true } } },
+        include: { department: true, user: { select: { id: true, email: true, role: true, roles: true, isActive: true, lastLogin: true, lockedAt: true, failedLoginAttempts: true } } },
         orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
         skip,
         take: parseInt(limit),
@@ -86,7 +87,7 @@ export async function getEmployees(req: AuthRequest, res: Response): Promise<voi
 }
 
 export async function createEmployee(req: AuthRequest, res: Response): Promise<void> {
-  const { email, firstName, lastName, middleName, mobile, address, designation, departmentId, dateHired, role,
+  const { email, firstName, lastName, middleName, mobile, address, designation, departmentId, dateHired, role, roles,
           nickname, gender, birthday, emergencyContact, emergencyContactNumber,
           sssNumber, pagibigNumber, philhealthNumber, tinNumber, employmentType, employeeNumber: rawEmployeeNumber } = req.body;
 
@@ -107,12 +108,14 @@ export async function createEmployee(req: AuthRequest, res: Response): Promise<v
 
     const tempPassword = crypto.randomBytes(8).toString('hex');
     const hashed = await bcrypt.hash(tempPassword, 12);
+    const resolved = resolveUserRoles({ roles, role });
 
     const user = await prisma.user.create({
       data: {
         email,
         password: hashed,
-        role: role || 'EMPLOYEE',
+        role: resolved.role,
+        roles: resolved.roles,
         employee: {
           create: {
             employeeNumber,
@@ -162,7 +165,7 @@ export async function createEmployee(req: AuthRequest, res: Response): Promise<v
     });
 
     // If created as department head, link them to their department
-    if ((role || 'EMPLOYEE') === 'DEPARTMENT_HEAD' && departmentId) {
+    if (resolved.roles.includes('DEPARTMENT_HEAD') && departmentId) {
       await prisma.department.update({
         where: { id: departmentId },
         data: { headId: user.id },
@@ -185,7 +188,7 @@ export async function getEmployee(req: AuthRequest, res: Response): Promise<void
       where: { id: req.params.id },
       include: {
         department: true,
-        user: { select: { role: true, lastLogin: true, isActive: true, lockedAt: true, failedLoginAttempts: true } },
+        user: { select: { role: true, roles: true, lastLogin: true, isActive: true, lockedAt: true, failedLoginAttempts: true } },
         documents: true,
       },
     });
@@ -197,7 +200,7 @@ export async function getEmployee(req: AuthRequest, res: Response): Promise<void
 }
 
 export async function updateEmployee(req: AuthRequest, res: Response): Promise<void> {
-  const { email, firstName, lastName, middleName, mobile, address, designation, departmentId, dateHired, role,
+  const { email, firstName, lastName, middleName, mobile, address, designation, departmentId, dateHired, role, roles,
           sssNumber, pagibigNumber, philhealthNumber, tinNumber,
           nickname, gender, birthday, emergencyContact, emergencyContactNumber, employmentType,
           employeeNumber: rawEmployeeNumber } = req.body;
@@ -250,10 +253,21 @@ export async function updateEmployee(req: AuthRequest, res: Response): Promise<v
       include: { department: true },
     });
 
-    // Sync role and/or email on the user record
-    const effectiveRole = role || existing.user.role;
+    // Sync roles and/or email on the user record
     const userUpdates: Record<string, unknown> = {};
-    if (role && role !== existing.user.role) userUpdates.role = role;
+    let effectiveRoles: string[] = (existing.user.roles && existing.user.roles.length)
+      ? existing.user.roles
+      : [existing.user.role];
+
+    if (roles != null || role != null) {
+      const resolved = resolveUserRoles({
+        roles: roles != null ? roles : undefined,
+        role: roles == null ? role : undefined,
+      });
+      userUpdates.role = resolved.role;
+      userUpdates.roles = resolved.roles;
+      effectiveRoles = resolved.roles;
+    }
     if (newEmail) userUpdates.email = newEmail;
     if (Object.keys(userUpdates).length) {
       await prisma.user.update({ where: { id: existing.userId }, data: userUpdates });
@@ -262,7 +276,7 @@ export async function updateEmployee(req: AuthRequest, res: Response): Promise<v
     // If DEPARTMENT_HEAD and home dept set, ensure they are head of home dept only
     // (do not clear other departments they already head — multi-dept approvers allowed)
     const targetDeptId = departmentId || existing.departmentId;
-    if (effectiveRole === 'DEPARTMENT_HEAD' && targetDeptId) {
+    if (effectiveRoles.includes('DEPARTMENT_HEAD') && targetDeptId) {
       await prisma.department.update({
         where: { id: targetDeptId },
         data: { headId: existing.userId },
@@ -468,7 +482,7 @@ export async function deleteDocument(req: AuthRequest, res: Response): Promise<v
 export async function exportEmployees(_req: AuthRequest, res: Response): Promise<void> {
   try {
     const employees = await prisma.employee.findMany({
-      include: { department: true, user: { select: { role: true } } },
+      include: { department: true, user: { select: { role: true, roles: true } } },
       orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
     });
 
@@ -485,7 +499,7 @@ export async function exportEmployees(_req: AuthRequest, res: Response): Promise
       'Designation': e.designation ?? '',
       'DEPARTMENT': e.department?.name ?? '',
       'Date Hired': e.dateHired ? e.dateHired.toISOString().split('T')[0] : '',
-      'Role': e.user?.role ?? 'EMPLOYEE',
+      'Role': (e.user?.roles?.length ? e.user.roles.join('|') : e.user?.role) ?? 'EMPLOYEE',
       'Present Address': e.address ?? '',
       'Emergency Contact Person': e.emergencyContact ?? '',
       'Contact Number': e.emergencyContactNumber ?? '',
@@ -606,9 +620,12 @@ export async function importEmployees(req: AuthRequest, res: Response): Promise<
         continue;
       }
 
-      const roleInput = String(row['Role'] ?? 'EMPLOYEE').trim().toUpperCase();
-      const validRoles = ['EMPLOYEE', 'DEPARTMENT_HEAD', 'HR', 'ADMIN'];
-      const role = validRoles.includes(roleInput) ? roleInput : 'EMPLOYEE';
+      // Role column may be single value or comma-separated multi-roles
+      const roleInputRaw = String(row['Role'] ?? row['Roles'] ?? 'EMPLOYEE').trim().toUpperCase();
+      const resolvedImport = resolveUserRoles({
+        roles: roleInputRaw.split(/[,|]/).map((s) => s.trim()).filter(Boolean),
+      });
+      const role = resolvedImport.role;
 
       const departmentName = String(row['DEPARTMENT'] ?? row['Department'] ?? '').trim();
       let departmentId: string | null = deptMap.get(departmentName.toLowerCase()) ?? null;
@@ -667,7 +684,8 @@ export async function importEmployees(req: AuthRequest, res: Response): Promise<
           data: {
             email,
             password: hashed,
-            role: role as 'EMPLOYEE' | 'DEPARTMENT_HEAD' | 'HR' | 'ADMIN',
+            role: resolvedImport.role,
+            roles: resolvedImport.roles,
             employee: {
               create: {
                 employeeNumber,
@@ -713,8 +731,7 @@ export async function importEmployees(req: AuthRequest, res: Response): Promise<
             { employeeId: empId, year, leaveType: 'VAWC', totalDays: 10 },
           ],
         });
-
-        if (role === 'DEPARTMENT_HEAD' && departmentId) {
+        if (resolvedImport.roles.includes('DEPARTMENT_HEAD') && departmentId) {
           await prisma.department.update({ where: { id: departmentId }, data: { headId: user.id } });
         }
 

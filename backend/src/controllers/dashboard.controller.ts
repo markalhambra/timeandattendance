@@ -3,7 +3,8 @@ import { AuthRequest } from '../middleware/auth.middleware';
 import { prisma } from '../config/database';
 import { phtToday, phtYear, phtMonth, phtMonthBounds } from '../utils/timezone';
 import { logger } from '../config/logger';
-import { getHeadedDepartments } from '../utils/departmentHead';
+import { getHeadedDepartments, getTeamEmployeeFilter } from '../utils/departmentHead';
+import { hasAnyRole, isHrOrAdmin } from '../utils/roles';
 
 const LEAVE_BALANCE_DEFAULTS = {
   SICK: 15,
@@ -108,13 +109,31 @@ export async function employeeDashboard(req: AuthRequest, res: Response): Promis
 export async function deptHeadDashboard(req: AuthRequest, res: Response): Promise<void> {
   try {
     const headed = await getHeadedDepartments(req.user!.sub);
-    const headedIds = headed.map((d) => d.id);
-    if (!headedIds.length) {
+
+    // Team scope: DH headed staff ∪ MD department-heads. HR/Admin with headed depts keep headed scope.
+    let filter = await getTeamEmployeeFilter({
+      userId: req.user!.sub,
+      isDeptHead: hasAnyRole(req.user, 'DEPARTMENT_HEAD') || (isHrOrAdmin(req.user) && headed.length > 0),
+      isManagingDirector: hasAnyRole(req.user, 'MANAGING_DIRECTOR'),
+    });
+
+    if (!filter && isHrOrAdmin(req.user) && headed.length) {
+      filter = {
+        employeeWhere: {
+          departmentId: { in: headed.map((d) => d.id) },
+          userId: { not: req.user!.sub },
+        },
+        departmentIds: headed.map((d) => d.id),
+        labels: headed.map((d) => d.name),
+      };
+    }
+
+    if (!filter) {
       res.json({
         success: true,
         data: {
           department: null,
-          departments: [],
+          departments: headed,
           totalEmployees: 0,
           todayStats: { total: 0, present: 0, absent: 0, onsite: 0, wfh: 0, ob: 0 },
           todayRecords: [],
@@ -127,8 +146,7 @@ export async function deptHeadDashboard(req: AuthRequest, res: Response): Promis
     }
 
     const today = phtToday();
-
-    const where = { departmentId: { in: headedIds }, isActive: true, isArchived: false };
+    const where = { ...filter.employeeWhere, isActive: true, isArchived: false };
 
     const [employees, todayAttendance, pendingLeaves, pendingOvertime, pendingCorrections] = await Promise.all([
       prisma.employee.count({ where }),
@@ -141,11 +159,8 @@ export async function deptHeadDashboard(req: AuthRequest, res: Response): Promis
       prisma.attendanceCorrection.count({ where: { status: 'PENDING', employee: where } }),
     ]);
 
-    const primary = headed[0];
-    const departmentLabel =
-      headed.length === 1
-        ? primary
-        : { id: primary.id, name: headed.map((d) => d.name).join(', ') };
+    const labelName = filter.labels.join(', ') || (headed[0]?.name ?? 'Team');
+    const departmentLabel = { id: headed[0]?.id || 'team', name: labelName };
 
     res.json({
       success: true,
@@ -167,7 +182,8 @@ export async function deptHeadDashboard(req: AuthRequest, res: Response): Promis
         pendingCorrections,
       },
     });
-  } catch {
+  } catch (err) {
+    logger.error('deptHeadDashboard error:', err);
     res.status(500).json({ success: false, message: 'Failed to load dashboard.' });
   }
 }

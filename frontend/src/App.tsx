@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Layout from './components/layout/Layout';
+import { hasAnyRole, homePathForRoles } from './utils/roles';
 
 // Auth pages (small — keep eager for fast first paint)
 import LoginPage from './pages/auth/Login';
@@ -42,19 +43,13 @@ function RequireAuth({ children, roles }: { children: React.ReactNode; roles?: s
   const { user, isLoading, isAuthenticated } = useAuth();
   if (isLoading) return <div className="flex h-screen items-center justify-center"><div className="h-8 w-8 border-2 border-black border-t-transparent rounded-full animate-spin" /></div>;
   if (!isAuthenticated) return <Navigate to="/login" replace />;
-  if (roles && user && !roles.includes(user.role)) return <Navigate to="/" replace />;
+  if (roles && user && !hasAnyRole(user, ...roles)) return <Navigate to="/" replace />;
   return <>{children}</>;
 }
 
 function HomeRedirect() {
   const { user } = useAuth();
-  const roleRoutes: Record<string, string> = {
-    EMPLOYEE: '/dashboard',
-    DEPARTMENT_HEAD: '/dept-head/dashboard',
-    HR: '/hr/dashboard',
-    ADMIN: '/hr/dashboard',
-  };
-  return <Navigate to={roleRoutes[user?.role || 'EMPLOYEE'] || '/dashboard'} replace />;
+  return <Navigate to={homePathForRoles(user)} replace />;
 }
 
 export default function App() {
@@ -79,8 +74,8 @@ export default function App() {
           <Route path="/profile" element={<RequireAuth><Layout><ProfilePage /></Layout></RequireAuth>} />
 
           {/* Department Head */}
-          <Route path="/dept-head/dashboard" element={<RequireAuth roles={['DEPARTMENT_HEAD', 'HR', 'ADMIN']}><Layout><DeptHeadDashboard /></Layout></RequireAuth>} />
-          <Route path="/dept-head/approvals" element={<RequireAuth roles={['DEPARTMENT_HEAD', 'HR', 'ADMIN']}><Layout><ApprovalsPage /></Layout></RequireAuth>} />
+          <Route path="/dept-head/dashboard" element={<RequireAuth roles={['DEPARTMENT_HEAD', 'MANAGING_DIRECTOR', 'HR', 'ADMIN']}><Layout><DeptHeadDashboard /></Layout></RequireAuth>} />
+          <Route path="/dept-head/approvals" element={<RequireAuth roles={['DEPARTMENT_HEAD', 'MANAGING_DIRECTOR', 'HR', 'ADMIN']}><Layout><ApprovalsPage /></Layout></RequireAuth>} />
 
           {/* HR */}
           <Route path="/hr/dashboard" element={<RequireAuth roles={['HR', 'ADMIN']}><Layout><HRDashboard /></Layout></RequireAuth>} />
@@ -88,7 +83,7 @@ export default function App() {
           <Route path="/hr/employees" element={<RequireAuth roles={['HR', 'ADMIN']}><Layout><HREmployeesPage /></Layout></RequireAuth>} />
           <Route path="/hr/employees/:id" element={<RequireAuth roles={['HR', 'ADMIN']}><Layout><HREmployeeProfile /></Layout></RequireAuth>} />
           <Route path="/hr/leave-management" element={<RequireAuth roles={['HR', 'ADMIN']}><Layout><HRLeaveManagement /></Layout></RequireAuth>} />
-          <Route path="/hr/payslips" element={<RequireAuth roles={['HR', 'ADMIN']}><Layout><HRPayslipsPage /></Layout></RequireAuth>} />
+          <Route path="/hr/payslips" element={<RequireAuth roles={['HR', 'ADMIN', 'PAYROLL']}><Layout><HRPayslipsPage /></Layout></RequireAuth>} />
 
           {/* Admin — /admin/dashboard and /admin/employees redirect to HR equivalents */}
           <Route path="/admin/dashboard" element={<RequireAuth><Navigate to="/hr/dashboard" replace /></RequireAuth>} />

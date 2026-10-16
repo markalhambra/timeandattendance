@@ -5,6 +5,7 @@ import * as XLSX from 'xlsx';
 import { AttendanceStatus } from '@prisma/client';
 import { SETTING_KEYS, settingsService, SettingKey } from '../services/settings.service';
 import { phtToday } from '../utils/timezone';
+import { hasAnyRole } from '../utils/roles';
 
 function numInRange(v: unknown, min: number, max: number): number | null {
   const n = typeof v === 'number' ? v : parseFloat(String(v));
@@ -39,6 +40,7 @@ export async function getSettings(req: AuthRequest, res: Response): Promise<void
           id: true,
           email: true,
           role: true,
+          roles: true,
           isActive: true,
           employee: { select: { firstName: true, lastName: true } },
         },
@@ -115,9 +117,9 @@ export async function updateSettings(req: AuthRequest, res: Response): Promise<v
       if (id) {
         const user = await prisma.user.findUnique({
           where: { id },
-          select: { id: true, role: true, isActive: true },
+          select: { id: true, role: true, roles: true, isActive: true },
         });
-        if (!user || !user.isActive || !['HR', 'ADMIN'].includes(user.role)) {
+        if (!user || !user.isActive || !hasAnyRole(user, 'HR', 'ADMIN')) {
           res.status(400).json({ success: false, message: 'Approver must be an active HR or ADMIN user.' });
           return;
         }
@@ -154,11 +156,18 @@ export async function updateSettings(req: AuthRequest, res: Response): Promise<v
 export async function getApproverCandidates(req: AuthRequest, res: Response): Promise<void> {
   try {
     const users = await prisma.user.findMany({
-      where: { isActive: true, role: { in: ['HR', 'ADMIN'] } },
+      where: {
+        isActive: true,
+        OR: [
+          { role: { in: ['HR', 'ADMIN'] } },
+          { roles: { hasSome: ['HR', 'ADMIN'] } },
+        ],
+      },
       select: {
         id: true,
         email: true,
         role: true,
+        roles: true,
         employee: { select: { firstName: true, lastName: true } },
       },
       orderBy: { email: 'asc' },

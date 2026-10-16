@@ -96,7 +96,7 @@ export default function ProfilePage() {
         <div>
           <div className="font-bold text-lg">{profile?.firstName} {profile?.lastName}</div>
           <div className="text-sm text-gray-500">{profile?.user?.email || user?.email}</div>
-          <div className="text-xs text-gray-400 mt-0.5">{profile?.user?.role?.replace('_', ' ') || user?.role?.replace('_', ' ')}</div>
+          <div className="text-xs text-gray-400 mt-0.5">{(profile?.user?.roles?.length ? profile.user.roles : profile?.user?.role ? [profile.user.role] : user?.roles?.length ? user.roles : user?.role ? [user.role] : []).map((r) => r.replace(/_/g, ' ')).join(', ') || '—'}</div>
         </div>
       </div>
 

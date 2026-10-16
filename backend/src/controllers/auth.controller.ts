@@ -7,6 +7,8 @@ import { AuthRequest } from '../middleware/auth.middleware';
 import { notificationService } from '../services/notification.service';
 import { logger } from '../config/logger';
 import { settingsService } from '../services/settings.service';
+import { getUserRoles, primaryRole } from '../utils/roles';
+import { Role } from '@prisma/client';
 
 export async function login(req: Request, res: Response): Promise<void> {
   const { email, password } = req.body;
@@ -83,9 +85,12 @@ export async function login(req: Request, res: Response): Promise<void> {
     }
 
     // Successful login — reset failed attempts only (lockedAt is never cleared here)
+    const roles = getUserRoles(user);
+    const role = user.role || primaryRole(roles as Role[]);
     const payload = {
       sub: user.id,
-      role: user.role,
+      role,
+      roles,
       employeeId: user.employee?.id,
       departmentId: user.employee?.department?.id,
     };
@@ -120,7 +125,8 @@ export async function login(req: Request, res: Response): Promise<void> {
         user: {
           id: user.id,
           email: user.email,
-          role: user.role,
+          role,
+          roles,
           employee: user.employee
             ? {
                 id: user.employee.id,
@@ -164,7 +170,15 @@ export async function refreshToken(req: Request, res: Response): Promise<void> {
     }
 
     const employee = await prisma.employee.findUnique({ where: { userId: user.id }, select: { id: true, departmentId: true } });
-    const newPayload = { sub: user.id, role: user.role, employeeId: employee?.id, departmentId: employee?.departmentId ?? undefined };
+    const roles = getUserRoles(user);
+    const role = user.role || primaryRole(roles as Role[]);
+    const newPayload = {
+      sub: user.id,
+      role,
+      roles,
+      employeeId: employee?.id,
+      departmentId: employee?.departmentId ?? undefined,
+    };
     const accessToken = signAccessToken(newPayload);
     const newRefreshToken = signRefreshToken(newPayload);
 
@@ -204,11 +218,23 @@ export async function me(req: AuthRequest, res: Response): Promise<void> {
     const user = await prisma.user.findUnique({
       where: { id: req.user!.sub },
       select: {
-        id: true, email: true, role: true, isActive: true, lastLogin: true, createdAt: true, updatedAt: true,
+        id: true, email: true, role: true, roles: true, isActive: true, lastLogin: true, createdAt: true, updatedAt: true,
         employee: { include: { department: true } },
       },
     });
-    res.json({ success: true, data: user });
+    if (!user) {
+      res.status(404).json({ success: false, message: 'User not found.' });
+      return;
+    }
+    const roles = getUserRoles(user);
+    res.json({
+      success: true,
+      data: {
+        ...user,
+        roles,
+        role: user.role || primaryRole(roles as Role[]),
+      },
+    });
   } catch {
     res.status(500).json({ success: false, message: 'Failed to fetch profile.' });
   }

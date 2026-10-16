@@ -1,6 +1,6 @@
 // ─── Core Enums / Types ───────────────────────────────────────────────────────
 
-export type Role = 'EMPLOYEE' | 'DEPARTMENT_HEAD' | 'HR' | 'ADMIN';
+export type Role = 'EMPLOYEE' | 'DEPARTMENT_HEAD' | 'HR' | 'ADMIN' | 'PAYROLL' | 'MANAGING_DIRECTOR';
 export type AttendanceStatus = 'ON_SITE' | 'WFH' | 'OB' | 'ABSENT';
 export type LeaveType = 'SICK' | 'VACATION' | 'PML' | 'SML' | 'EMERGENCY' | 'SOLO_PARENT' | 'MATERNITY' | 'PATERNITY' | 'BEREAVEMENT' | 'MAGNA_CARTA_WOMEN' | 'CALAMITY' | 'VAWC' | 'LWOP';
 export type ApprovalStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
@@ -22,6 +22,7 @@ export interface AuthUser {
   id: string;
   email: string;
   role: Role;
+  roles?: Role[];
   employee?: {
     id: string;
     firstName: string;
@@ -79,6 +80,7 @@ export interface Employee {
     id: string;
     email: string;
     role: Role;
+    roles?: Role[];
     lastLogin?: string;
     isActive: boolean;
     lockedAt?: string | null;

@@ -1,6 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import { verifyAccessToken, JwtPayload } from '../config/jwt';
 import { prisma } from '../config/database';
+import { getUserRoles, hasAnyRole, primaryRole } from '../utils/roles';
+import { Role } from '@prisma/client';
 
 export interface AuthRequest extends Request {
   user?: JwtPayload;
@@ -17,10 +19,11 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
     const token = authHeader.split(' ')[1];
     const payload = verifyAccessToken(token);
 
-    // Verify user still exists, is active, and is not locked out
+    // Verify user still exists, is active, and is not locked out.
+    // Reload roles from DB so role changes apply without waiting for token expiry.
     const user = await prisma.user.findUnique({
       where: { id: payload.sub },
-      select: { id: true, isActive: true, role: true, lockedAt: true },
+      select: { id: true, isActive: true, role: true, roles: true, lockedAt: true },
     });
 
     if (!user || !user.isActive || user.lockedAt) {
@@ -33,7 +36,12 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
       return;
     }
 
-    req.user = payload;
+    const roles = getUserRoles(user);
+    req.user = {
+      ...payload,
+      role: user.role || primaryRole(roles as Role[]),
+      roles,
+    };
     next();
   } catch (err: any) {
     if (err.name === 'TokenExpiredError') {
@@ -50,7 +58,7 @@ export function authorize(...roles: string[]) {
       res.status(401).json({ success: false, message: 'Not authenticated.' });
       return;
     }
-    if (!roles.includes(req.user.role)) {
+    if (!hasAnyRole(req.user, ...roles)) {
       res.status(403).json({ success: false, message: 'Insufficient permissions.' });
       return;
     }

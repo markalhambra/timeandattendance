@@ -357,7 +357,7 @@ export default function EmployeeProfile() {
                 <Field label="Present Address" value={employee.address} />
               </div>
               <Field label="Last Login" value={employee.user?.lastLogin ? format(parseISO(employee.user.lastLogin), 'MMM d, yyyy h:mm a') : undefined} />
-              <Field label="Role" value={employee.user?.role} />
+              <Field label="Roles" value={(employee.user?.roles?.length ? employee.user.roles : employee.user?.role ? [employee.user.role] : []).map((r) => r.replace(/_/g, " ")).join(", ") || "—"} />
             </div>
           </div>
 

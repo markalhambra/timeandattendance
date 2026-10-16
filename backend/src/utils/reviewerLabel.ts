@@ -2,8 +2,11 @@ import { prisma } from '../config/database';
 
 const ROLE_LABELS: Record<string, string> = {
   DEPARTMENT_HEAD: 'Department Head',
+  MANAGING_DIRECTOR: 'Managing Director',
   HR: 'HR',
   ADMIN: 'Admin',
+  PAYROLL: 'Payroll',
+  EMPLOYEE: 'Employee',
 };
 
 export async function getReviewerLabel(userId: string, role: string): Promise<string> {

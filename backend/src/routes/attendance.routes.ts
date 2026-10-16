@@ -16,8 +16,8 @@ attendanceRoutes.get('/monthly-summary', attendanceController.getMonthlySummary)
 // Corrections
 attendanceRoutes.post('/corrections', auditLog('CREATE', 'AttendanceCorrection'), attendanceController.requestCorrection);
 attendanceRoutes.get('/corrections/my', attendanceController.getMyCorrections);
-attendanceRoutes.get('/corrections', authorize('DEPARTMENT_HEAD', 'HR', 'ADMIN'), attendanceController.getCorrections);
-attendanceRoutes.patch('/corrections/:id/review', authorize('DEPARTMENT_HEAD', 'HR', 'ADMIN'), attendanceController.reviewCorrection);
+attendanceRoutes.get('/corrections', authorize('DEPARTMENT_HEAD', 'MANAGING_DIRECTOR', 'HR', 'ADMIN'), attendanceController.getCorrections);
+attendanceRoutes.patch('/corrections/:id/review', authorize('DEPARTMENT_HEAD', 'MANAGING_DIRECTOR', 'HR', 'ADMIN'), attendanceController.reviewCorrection);
 
 // HR/Admin
 attendanceRoutes.get('/', authorize('HR', 'ADMIN', 'DEPARTMENT_HEAD'), attendanceController.getAllAttendance);

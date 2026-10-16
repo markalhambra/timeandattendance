@@ -4,8 +4,9 @@ import { prisma } from '../config/database';
 import { ApprovalStatus, LeaveType, LeaveDuration } from '@prisma/client';
 import { notificationService } from '../services/notification.service';
 import { phtYear, phtMonth } from '../utils/timezone';
-import { getHeadedDepartmentIds } from '../utils/departmentHead';
+import { canReviewAsDeptTier, getApprovalEmployeeWhere, getHeadedDepartmentIds } from '../utils/departmentHead';
 import { getReviewerLabel } from '../utils/reviewerLabel';
+import { hasAnyRole, isHrOrAdmin as userIsHrOrAdmin } from '../utils/roles';
 
 const LEAVE_BALANCE_DEFAULTS: Record<LeaveType, number> = {
   SICK: 15,
@@ -57,7 +58,7 @@ export async function fileLeave(req: AuthRequest, res: Response): Promise<void> 
 
   try {
     // Enforce 6-month minimum tenure for EMPLOYEE role — LWOP is always allowed
-    if (req.user!.role === 'EMPLOYEE' && leaveType !== 'LWOP') {
+    if (!hasAnyRole(req.user, 'HR', 'ADMIN') && leaveType !== 'LWOP') {
       const emp = await prisma.employee.findUnique({ where: { id: employeeId }, select: { dateHired: true } });
       if (emp?.dateHired) {
         const eligibleAt = new Date(emp.dateHired);
@@ -206,8 +207,9 @@ export async function getLeaveCalendar(req: AuthRequest, res: Response): Promise
       status: 'APPROVED',
     };
 
-    const isEmployee = req.user!.role === 'EMPLOYEE';
-    if (isEmployee) {
+    const isEmployeeOnly =
+      !hasAnyRole(req.user, 'DEPARTMENT_HEAD', 'MANAGING_DIRECTOR', 'HR', 'ADMIN');
+    if (isEmployeeOnly) {
       where.employeeId = req.user!.employeeId;
     } else if (departmentId) {
       where.employee = { departmentId };
@@ -262,17 +264,21 @@ export async function getAllLeaves(req: AuthRequest, res: Response): Promise<voi
       where.endDate = {};
       if (startDate) where.endDate.gte = new Date(startDate);
     }
-    if (req.user!.role === 'DEPARTMENT_HEAD') {
-      const headedIds = await getHeadedDepartmentIds(req.user!.sub);
-      if (!headedIds.length) { res.json({ success: true, data: [], meta: { total: 0, page: parseInt(page), limit: parseInt(limit) } }); return; }
-      // Exclude the dept head's own leave — those go to HR
-      where.employee = { departmentId: { in: headedIds }, userId: { not: req.user!.sub } };
+    if (!userIsHrOrAdmin(req.user) && hasAnyRole(req.user, 'DEPARTMENT_HEAD', 'MANAGING_DIRECTOR')) {
+      const empWhere = await getApprovalEmployeeWhere({
+        userId: req.user!.sub,
+        isDeptHead: hasAnyRole(req.user, 'DEPARTMENT_HEAD'),
+        isManagingDirector: hasAnyRole(req.user, 'MANAGING_DIRECTOR'),
+      });
+      if (!empWhere) {
+        res.json({ success: true, data: [], meta: { total: 0, page: parseInt(page), limit: parseInt(limit) } });
+        return;
+      }
+      where.employee = empWhere;
       if (req.query.reviewed === 'true') {
-        // History: leaves already finalized
         delete where.status;
         where.status = { not: 'PENDING' };
       } else {
-        // Pending queue: leaves not yet finalized
         where.status = 'PENDING';
       }
     } else if (departmentId) {
@@ -310,7 +316,14 @@ export async function reviewLeave(req: AuthRequest, res: Response): Promise<void
     if (!leave) { res.status(404).json({ success: false, message: 'Leave not found.' }); return; }
 
     const role = req.user!.role;
-    const isHrOrAdmin = role === 'HR' || role === 'ADMIN';
+    const reviewerName = hasAnyRole(req.user, 'MANAGING_DIRECTOR') && !hasAnyRole(req.user, 'DEPARTMENT_HEAD')
+      ? 'Managing Director'
+      : hasAnyRole(req.user, 'DEPARTMENT_HEAD') && !userIsHrOrAdmin(req.user)
+        ? 'Department Head'
+        : role;
+    const isHrOrAdmin = userIsHrOrAdmin(req.user);
+    const isDeptTier =
+      !isHrOrAdmin && hasAnyRole(req.user, 'DEPARTMENT_HEAD', 'MANAGING_DIRECTOR');
 
     // HR/Admin cannot approve their own leave
     if (isHrOrAdmin && leave.employeeId === req.user!.employeeId) {
@@ -318,17 +331,23 @@ export async function reviewLeave(req: AuthRequest, res: Response): Promise<void
       return;
     }
 
-    // Dept head: only headed departments, and only if not yet finalized
-    if (role === 'DEPARTMENT_HEAD') {
+    // Dept head / Managing Director: scoped review, only if not yet finalized
+    if (isDeptTier) {
       if (leave.status !== 'PENDING') {
         res.status(400).json({ success: false, message: 'Leave has already been reviewed.' }); return;
       }
       if (leave.employee.userId === req.user!.sub) {
         res.status(403).json({ success: false, message: 'You cannot approve your own leave. Please contact HR.' }); return;
       }
-      const headedIds = await getHeadedDepartmentIds(req.user!.sub);
-      if (!leave.employee.departmentId || !headedIds.includes(leave.employee.departmentId)) {
-        res.status(403).json({ success: false, message: 'You can only review leaves from your department.' }); return;
+      const allowed = await canReviewAsDeptTier({
+        reviewerUserId: req.user!.sub,
+        employeeUserId: leave.employee.userId,
+        employeeDepartmentId: leave.employee.departmentId,
+        isDeptHead: hasAnyRole(req.user, 'DEPARTMENT_HEAD'),
+        isManagingDirector: hasAnyRole(req.user, 'MANAGING_DIRECTOR'),
+      });
+      if (!allowed) {
+        res.status(403).json({ success: false, message: 'You can only review leaves within your approval scope.' }); return;
       }
     }
 
@@ -354,7 +373,7 @@ export async function reviewLeave(req: AuthRequest, res: Response): Promise<void
           data: { pendingDays: { decrement: leave.totalDays }, usedDays: { increment: leave.totalDays } },
         });
       }
-      await notificationService.notifyEmployee(leave.employeeId, 'APPROVAL_RESULT', { type: 'Leave Request', status, reviewer: role }, await getReviewerLabel(req.user!.sub, role));
+      await notificationService.notifyEmployee(leave.employeeId, 'APPROVAL_RESULT', { type: 'Leave Request', status, reviewer: reviewerName }, await getReviewerLabel(req.user!.sub, role));
       prisma.auditLog.create({ data: { userId: req.user!.sub, action: 'APPROVE', entity: 'LeaveRequest', entityId: id, ipAddress: req.ip, userAgent: req.headers['user-agent'] } }).catch(() => {});
       res.json({ success: true, data: updated }); return;
     }
@@ -378,7 +397,7 @@ export async function reviewLeave(req: AuthRequest, res: Response): Promise<void
           data: { pendingDays: { decrement: leave.totalDays } },
         });
       }
-      await notificationService.notifyEmployee(leave.employeeId, 'APPROVAL_RESULT', { type: 'Leave Request', status, reviewer: role }, await getReviewerLabel(req.user!.sub, role));
+      await notificationService.notifyEmployee(leave.employeeId, 'APPROVAL_RESULT', { type: 'Leave Request', status, reviewer: reviewerName }, await getReviewerLabel(req.user!.sub, role));
       prisma.auditLog.create({ data: { userId: req.user!.sub, action: 'REJECT', entity: 'LeaveRequest', entityId: id, ipAddress: req.ip, userAgent: req.headers['user-agent'] } }).catch(() => {});
       res.json({ success: true, data: updated }); return;
     }
@@ -416,7 +435,11 @@ export async function reviewLeave(req: AuthRequest, res: Response): Promise<void
     await notificationService.notifyEmployee(leave.employeeId, 'APPROVAL_RESULT', {
       type: 'Leave Request',
       status,
-      reviewer: role === 'DEPARTMENT_HEAD' ? 'Department Head' : role,
+      reviewer: hasAnyRole(req.user, 'MANAGING_DIRECTOR') && !hasAnyRole(req.user, 'DEPARTMENT_HEAD')
+        ? 'Managing Director'
+        : hasAnyRole(req.user, 'DEPARTMENT_HEAD')
+          ? 'Department Head'
+          : role,
     }, await getReviewerLabel(req.user!.sub, role));
 
     prisma.auditLog.create({ data: { userId: req.user!.sub, action: finalStatus === 'APPROVED' ? 'APPROVE' : 'REJECT', entity: 'LeaveRequest', entityId: id, ipAddress: req.ip, userAgent: req.headers['user-agent'] } }).catch(() => {});

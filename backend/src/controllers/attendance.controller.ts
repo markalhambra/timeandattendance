@@ -4,9 +4,10 @@ import { prisma } from '../config/database';
 import { AttendanceStatus, ApprovalStatus } from '@prisma/client';
 import { notificationService } from '../services/notification.service';
 import { phtToday, phtYear, phtMonth } from '../utils/timezone';
-import { getHeadedDepartmentIds } from '../utils/departmentHead';
+import { canReviewAsDeptTier, getApprovalEmployeeWhere, getHeadedDepartmentIds } from '../utils/departmentHead';
 import { getReviewerLabel } from '../utils/reviewerLabel';
 import { settingsService } from '../services/settings.service';
+import { hasAnyRole, isHrOrAdmin } from '../utils/roles';
 
 const MIN_FILEABLE_OT_MINUTES = 60; // 1 hour minimum to create/file OT
 
@@ -402,11 +403,18 @@ export async function getCorrections(req: AuthRequest, res: Response): Promise<v
     const where: any = {};
     if (status) where.status = status;
 
-    // Dept heads only see headed departments
-    if (req.user!.role === 'DEPARTMENT_HEAD') {
-      const headedIds = await getHeadedDepartmentIds(req.user!.sub);
-      if (!headedIds.length) { res.json({ success: true, data: [], meta: { total: 0, page: parseInt(page), limit: parseInt(limit) } }); return; }
-      where.employee = { departmentId: { in: headedIds } };
+    // Dept heads / MD scoped queues
+    if (!isHrOrAdmin(req.user) && hasAnyRole(req.user, 'DEPARTMENT_HEAD', 'MANAGING_DIRECTOR')) {
+      const empWhere = await getApprovalEmployeeWhere({
+        userId: req.user!.sub,
+        isDeptHead: hasAnyRole(req.user, 'DEPARTMENT_HEAD'),
+        isManagingDirector: hasAnyRole(req.user, 'MANAGING_DIRECTOR'),
+      });
+      if (!empWhere) {
+        res.json({ success: true, data: [], meta: { total: 0, page: parseInt(page), limit: parseInt(limit) } });
+        return;
+      }
+      where.employee = empWhere;
     } else if (departmentId) {
       where.employee = { departmentId };
     }
@@ -445,15 +453,21 @@ export async function reviewCorrection(req: AuthRequest, res: Response): Promise
     if (!correction) { res.status(404).json({ success: false, message: 'Correction not found.' }); return; }
 
     // HR/Admin cannot approve their own correction request
-    if ((req.user!.role === 'HR' || req.user!.role === 'ADMIN') && correction.employeeId === req.user!.employeeId) {
+    if (isHrOrAdmin(req.user) && correction.employeeId === req.user!.employeeId) {
       res.status(403).json({ success: false, message: 'You cannot approve your own request.' }); return;
     }
 
-    // Ensure dept head only reviews headed departments' corrections
-    if (req.user!.role === 'DEPARTMENT_HEAD') {
-      const headedIds = await getHeadedDepartmentIds(req.user!.sub);
-      if (!correction.employee.departmentId || !headedIds.includes(correction.employee.departmentId)) {
-        res.status(403).json({ success: false, message: 'You can only review corrections from your department.' }); return;
+    // Ensure dept head / MD only reviews within scope
+    if (!isHrOrAdmin(req.user) && hasAnyRole(req.user, 'DEPARTMENT_HEAD', 'MANAGING_DIRECTOR')) {
+      const allowed = await canReviewAsDeptTier({
+        reviewerUserId: req.user!.sub,
+        employeeUserId: correction.employee.userId,
+        employeeDepartmentId: correction.employee.departmentId,
+        isDeptHead: hasAnyRole(req.user, 'DEPARTMENT_HEAD'),
+        isManagingDirector: hasAnyRole(req.user, 'MANAGING_DIRECTOR'),
+      });
+      if (!allowed) {
+        res.status(403).json({ success: false, message: 'You can only review corrections within your approval scope.' }); return;
       }
     }
 
@@ -517,7 +531,11 @@ export async function reviewCorrection(req: AuthRequest, res: Response): Promise
     await notificationService.notifyEmployee(correction.employeeId, 'APPROVAL_RESULT', {
       type: 'Attendance Correction',
       status,
-      reviewer: req.user!.role === 'DEPARTMENT_HEAD' ? 'Department Head' : req.user!.role,
+      reviewer: hasAnyRole(req.user, 'MANAGING_DIRECTOR') && !hasAnyRole(req.user, 'DEPARTMENT_HEAD')
+        ? 'Managing Director'
+        : hasAnyRole(req.user, 'DEPARTMENT_HEAD')
+          ? 'Department Head'
+          : req.user!.role,
     }, await getReviewerLabel(req.user!.sub, req.user!.role));
 
     prisma.auditLog.create({
@@ -552,7 +570,7 @@ export async function getAllAttendance(req: AuthRequest, res: Response): Promise
     if (employeeId) where.employeeId = employeeId;
 
     const employeeFilter: any = {};
-    if (req.user!.role === 'DEPARTMENT_HEAD') {
+    if (hasAnyRole(req.user, 'DEPARTMENT_HEAD') && !hasAnyRole(req.user, 'HR', 'ADMIN')) {
       const headedIds = await getHeadedDepartmentIds(req.user!.sub);
       if (headedIds.length) employeeFilter.departmentId = { in: headedIds };
       else employeeFilter.departmentId = { in: [] };

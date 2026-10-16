@@ -1,6 +1,7 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { Role } from '../../types';
+import { formatRoles, hasAnyRole } from '../../utils/roles';
 
 interface NavItem {
   label: string;
@@ -10,21 +11,21 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  // Employee
-  { label: 'Dashboard', path: '/dashboard', icon: '⊞', roles: ['EMPLOYEE', 'DEPARTMENT_HEAD', 'HR', 'ADMIN'] },
-  { label: 'Attendance', path: '/attendance', icon: '◷', roles: ['EMPLOYEE', 'DEPARTMENT_HEAD', 'HR', 'ADMIN'] },
-  { label: 'Leave', path: '/leave', icon: '◈', roles: ['EMPLOYEE', 'DEPARTMENT_HEAD', 'HR', 'ADMIN'] },
-  { label: 'Overtime', path: '/overtime', icon: '⊕', roles: ['EMPLOYEE', 'DEPARTMENT_HEAD', 'HR', 'ADMIN'] },
-  { label: 'Corrections', path: '/corrections', icon: '✎', roles: ['EMPLOYEE', 'DEPARTMENT_HEAD', 'HR', 'ADMIN'] },
-  // Dept Head
-  { label: 'Team Overview', path: '/dept-head/dashboard', icon: '◉', roles: ['DEPARTMENT_HEAD', 'HR', 'ADMIN'] },
-  { label: 'Approvals', path: '/dept-head/approvals', icon: '✓', roles: ['DEPARTMENT_HEAD', 'HR', 'ADMIN'] },
+  // Employee workspace — everyone with EMPLOYEE-like access (all roles can self-serve except pure PAYROLL)
+  { label: 'Dashboard', path: '/dashboard', icon: '⊞', roles: ['EMPLOYEE', 'DEPARTMENT_HEAD', 'MANAGING_DIRECTOR', 'HR', 'ADMIN'] },
+  { label: 'Attendance', path: '/attendance', icon: '◷', roles: ['EMPLOYEE', 'DEPARTMENT_HEAD', 'MANAGING_DIRECTOR', 'HR', 'ADMIN'] },
+  { label: 'Leave', path: '/leave', icon: '◈', roles: ['EMPLOYEE', 'DEPARTMENT_HEAD', 'MANAGING_DIRECTOR', 'HR', 'ADMIN'] },
+  { label: 'Overtime', path: '/overtime', icon: '⊕', roles: ['EMPLOYEE', 'DEPARTMENT_HEAD', 'MANAGING_DIRECTOR', 'HR', 'ADMIN'] },
+  { label: 'Corrections', path: '/corrections', icon: '✎', roles: ['EMPLOYEE', 'DEPARTMENT_HEAD', 'MANAGING_DIRECTOR', 'HR', 'ADMIN'] },
+  // Dept Head / MD
+  { label: 'Team Overview', path: '/dept-head/dashboard', icon: '◉', roles: ['DEPARTMENT_HEAD', 'MANAGING_DIRECTOR', 'HR', 'ADMIN'] },
+  { label: 'Approvals', path: '/dept-head/approvals', icon: '✓', roles: ['DEPARTMENT_HEAD', 'MANAGING_DIRECTOR', 'HR', 'ADMIN'] },
   // HR
   { label: 'HR Dashboard', path: '/hr/dashboard', icon: '⊛', roles: ['HR', 'ADMIN'] },
   { label: 'HR Employees', path: '/hr/employees', icon: '◎', roles: ['HR', 'ADMIN'] },
   { label: 'Reports', path: '/hr/reports', icon: '▤', roles: ['HR', 'ADMIN'] },
   { label: 'Leave Management', path: '/hr/leave-management', icon: '◈', roles: ['HR', 'ADMIN'] },
-  { label: 'Payslips', path: '/hr/payslips', icon: '₱', roles: ['HR', 'ADMIN'] },
+  { label: 'Payslips', path: '/hr/payslips', icon: '₱', roles: ['HR', 'ADMIN', 'PAYROLL'] },
   { label: 'Departments', path: '/admin/departments', icon: '▣', roles: ['HR', 'ADMIN'] },
   { label: 'Audit Logs', path: '/admin/audit', icon: '▧', roles: ['HR', 'ADMIN'] },
   { label: 'Settings', path: '/admin/settings', icon: '⚙', roles: ['ADMIN'] },
@@ -36,7 +37,7 @@ export default function Sidebar({ onClose }: Props) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
-  const visibleItems = NAV_ITEMS.filter((item) => user && item.roles.includes(user.role));
+  const visibleItems = NAV_ITEMS.filter((item) => user && hasAnyRole(user, ...item.roles));
 
   const handleLogout = async () => {
     await logout();
@@ -76,7 +77,7 @@ export default function Sidebar({ onClose }: Props) {
             <div className="text-sm font-semibold truncate">
               {user?.employee ? `${user.employee.firstName} ${user.employee.lastName}` : user?.email}
             </div>
-            <div className="text-[11px] text-gray-500">{user?.role?.replace('_', ' ')}</div>
+            <div className="text-[11px] text-gray-500">{formatRoles(user)}</div>
           </div>
         </div>
       </div>
