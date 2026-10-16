@@ -1,5 +1,5 @@
 import { prisma } from '../config/database';
-import { getSupabaseClient, STORAGE_BUCKET } from '../config/supabase';
+import { ensureStorageBucket, getSupabaseClient, STORAGE_BUCKET } from '../config/supabase';
 import { logger } from '../config/logger';
 import { googleSheetsService } from './google-sheets.service';
 import {
@@ -214,6 +214,7 @@ export async function generatePayslipsForRun(opts: {
   let generatedCount = 0;
   let failedCount = 0;
   const failures: { name: string; error: string }[] = [];
+  await ensureStorageBucket();
   const sb = getSupabaseClient();
 
   // Process sequentially to stay within serverless memory/time; batch small
