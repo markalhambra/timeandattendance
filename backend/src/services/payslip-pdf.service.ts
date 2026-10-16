@@ -1,6 +1,12 @@
 import PDFDocument from 'pdfkit';
 import { PayrollRowAmounts } from './payroll-parse.service';
 
+// PDFKit loads standard fonts via package imports (`#standard-fonts/*`) at runtime.
+// Vercel/NFT file tracing misses those dynamic requires, so pin them statically.
+// (Production error: Cannot find module '.../pdfkit/js/standard-fonts/Helvetica.cjs')
+import 'pdfkit/standard-fonts/Helvetica';
+import 'pdfkit/standard-fonts/HelveticaBold';
+
 export interface PayslipPdfInput {
   companyName?: string;
   employeeName: string;
