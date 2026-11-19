@@ -462,11 +462,13 @@ model AuditLog {
 model Holiday {
   id          String   @id @default(uuid())
   name        String
-  date        DateTime @db.Date
+  date        DateTime @db.Date // inclusive start
+  endDate     DateTime @db.Date // inclusive end; same as date for a one-day holiday
   type        String   // REGULAR, SPECIAL_NON_WORKING, SPECIAL_WORKING
   isRecurring Boolean  @default(false)
   createdAt   DateTime @default(now())
 
+  @@index([date, endDate])
   @@map("holidays")
 }
 

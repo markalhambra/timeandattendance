@@ -7,6 +7,7 @@ interface Holiday {
   id: string;
   name: string;
   date: string;
+  endDate: string;
   type: string;
   isRecurring: boolean;
 }
@@ -41,6 +42,11 @@ function formatDateLabel(iso: string): string {
   });
 }
 
+function formatRange(start: string, end?: string): string {
+  if (!end || end === start) return formatDateLabel(start);
+  return `${formatDateLabel(start)} – ${formatDateLabel(end)}`;
+}
+
 function toastEffects(effects?: HolidayEffects) {
   if (!effects) return;
   const parts = [
@@ -57,7 +63,7 @@ function toastEffects(effects?: HolidayEffects) {
 export default function HrHolidays() {
   const qc = useQueryClient();
   const [year, setYear] = useState(manilaYear);
-  const [form, setForm] = useState({ name: '', date: '' });
+  const [form, setForm] = useState({ name: '', date: '', endDate: '' });
   const [editing, setEditing] = useState<Holiday | null>(null);
 
   const { data: holidays, isLoading, isError } = useQuery<Holiday[]>({
@@ -68,18 +74,18 @@ export default function HrHolidays() {
   const invalidate = () => qc.invalidateQueries({ queryKey: ['holidays'] });
 
   const createMutation = useMutation({
-    mutationFn: (body: { name: string; date: string }) => api.post('/holidays', body),
+    mutationFn: (body: { name: string; date: string; endDate: string }) => api.post('/holidays', body),
     onSuccess: (res) => {
       toast.success('Holiday added.');
       toastEffects(res.data.effects);
-      setForm({ name: '', date: '' });
+      setForm({ name: '', date: '', endDate: '' });
       invalidate();
     },
     onError: (err: any) => toast.error(err?.response?.data?.message || 'Failed to add holiday.'),
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, body }: { id: string; body: { name: string; date: string } }) => api.put(`/holidays/${id}`, body),
+    mutationFn: ({ id, body }: { id: string; body: { name: string; date: string; endDate: string } }) => api.put(`/holidays/${id}`, body),
     onSuccess: (res) => {
       toast.success('Holiday updated.');
       toastEffects(res.data.effects);
@@ -105,7 +111,7 @@ export default function HrHolidays() {
         <div>
           <h1 className="text-2xl font-black">Holidays</h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            Non-working holidays are not absences. Clocked time on those dates counts as overtime.
+            Set one day or a date range, such as a Christmas break from December 20 to January 3. Every day in the range is a non-working holiday.
           </p>
         </div>
         <label className="text-sm text-gray-600">
@@ -123,7 +129,7 @@ export default function HrHolidays() {
       </div>
 
       <form
-        className="card p-5 grid grid-cols-1 sm:grid-cols-[1fr_180px_auto] gap-3 items-end"
+        className="card p-5 grid grid-cols-1 sm:grid-cols-[1fr_160px_160px_auto] gap-3 items-end"
         onSubmit={(e) => {
           e.preventDefault();
           createMutation.mutate(form);
@@ -141,16 +147,31 @@ export default function HrHolidays() {
           />
         </label>
         <label className="text-sm">
-          <span className="block text-gray-500 mb-1">Date</span>
+          <span className="block text-gray-500 mb-1">Start date</span>
           <input
             type="date"
             className="input w-full"
             value={form.date}
-            onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))}
+            onChange={(e) => setForm((f) => ({
+              ...f,
+              date: e.target.value,
+              endDate: !f.endDate || f.endDate < e.target.value ? e.target.value : f.endDate,
+            }))}
             required
           />
         </label>
-        <button type="submit" className="btn-primary" disabled={createMutation.isPending || !form.name.trim() || !form.date}>
+        <label className="text-sm">
+          <span className="block text-gray-500 mb-1">End date</span>
+          <input
+            type="date"
+            className="input w-full"
+            value={form.endDate}
+            min={form.date || undefined}
+            onChange={(e) => setForm((f) => ({ ...f, endDate: e.target.value }))}
+            required
+          />
+        </label>
+        <button type="submit" className="btn-primary" disabled={createMutation.isPending || !form.name.trim() || !form.date || !form.endDate}>
           Add holiday
         </button>
       </form>
@@ -175,7 +196,7 @@ export default function HrHolidays() {
             <tbody>
               {holidays.map((holiday) => (
                 <tr key={holiday.id} className="border-b border-gray-50">
-                  <td className="px-5 py-3 whitespace-nowrap">{formatDateLabel(holiday.date)}</td>
+                  <td className="px-5 py-3 whitespace-nowrap">{formatRange(holiday.date, holiday.endDate || holiday.date)}</td>
                   <td className="px-5 py-3 font-medium">{holiday.name}</td>
                   <td className="px-5 py-3 text-gray-500">{TYPE_LABEL[holiday.type] || holiday.type}</td>
                   <td className="px-5 py-3 text-right space-x-2">
@@ -184,7 +205,7 @@ export default function HrHolidays() {
                       type="button"
                       className="text-xs text-red-600 px-2"
                       onClick={() => {
-                        if (confirm(`Remove ${holiday.name} on ${formatDateLabel(holiday.date)}?`)) {
+                        if (confirm(`Remove ${holiday.name} (${formatRange(holiday.date, holiday.endDate || holiday.date)})?`)) {
                           deleteMutation.mutate(holiday.id);
                         }
                       }}
@@ -205,7 +226,7 @@ export default function HrHolidays() {
             className="card p-6 w-full max-w-md space-y-4"
             onSubmit={(e) => {
               e.preventDefault();
-              updateMutation.mutate({ id: editing.id, body: { name: editing.name, date: editing.date } });
+              updateMutation.mutate({ id: editing.id, body: { name: editing.name, date: editing.date, endDate: editing.endDate || editing.date } });
             }}
           >
             <h2 className="font-bold text-lg">Edit holiday</h2>
@@ -220,17 +241,32 @@ export default function HrHolidays() {
               />
             </label>
             <label className="block text-sm">
-              <span className="block text-gray-500 mb-1">Date</span>
+              <span className="block text-gray-500 mb-1">Start date</span>
               <input
                 type="date"
                 className="input w-full"
                 value={editing.date}
-                onChange={(e) => setEditing({ ...editing, date: e.target.value })}
+                onChange={(e) => setEditing({
+                  ...editing,
+                  date: e.target.value,
+                  endDate: !editing.endDate || editing.endDate < e.target.value ? e.target.value : editing.endDate,
+                })}
+                required
+              />
+            </label>
+            <label className="block text-sm">
+              <span className="block text-gray-500 mb-1">End date</span>
+              <input
+                type="date"
+                className="input w-full"
+                value={editing.endDate || editing.date}
+                min={editing.date}
+                onChange={(e) => setEditing({ ...editing, endDate: e.target.value })}
                 required
               />
             </label>
             <p className="text-xs text-gray-500">
-              Changing the date recalculates attendance and leave for both the old and new dates. Filed or approved overtime credits are not rewritten.
+              Use the same start and end date for a one-day holiday. Changing the range recalculates attendance and leave for the old and new dates. Filed or approved overtime credits are not rewritten.
             </p>
             <div className="flex gap-2">
               <button type="button" className="btn-secondary flex-1" onClick={() => setEditing(null)}>Cancel</button>

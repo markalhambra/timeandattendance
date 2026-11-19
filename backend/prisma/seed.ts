@@ -177,14 +177,14 @@ async function main() {
 
   // Seed holidays
   const holidays = [
-    { name: "New Year's Day", date: new Date('2025-01-01'), type: 'REGULAR', isRecurring: true },
-    { name: 'Araw ng Kagitingan', date: new Date('2025-04-09'), type: 'REGULAR', isRecurring: true },
-    { name: 'Labor Day', date: new Date('2025-05-01'), type: 'REGULAR', isRecurring: true },
-    { name: 'Independence Day', date: new Date('2025-06-12'), type: 'REGULAR', isRecurring: true },
-    { name: 'National Heroes Day', date: new Date('2025-08-25'), type: 'REGULAR', isRecurring: true },
-    { name: 'Bonifacio Day', date: new Date('2025-11-30'), type: 'REGULAR', isRecurring: true },
-    { name: 'Christmas Day', date: new Date('2025-12-25'), type: 'REGULAR', isRecurring: true },
-    { name: 'Rizal Day', date: new Date('2025-12-30'), type: 'REGULAR', isRecurring: true },
+    { name: "New Year's Day", date: new Date('2025-01-01'), endDate: new Date('2025-01-01'), type: 'REGULAR', isRecurring: true },
+    { name: 'Araw ng Kagitingan', date: new Date('2025-04-09'), endDate: new Date('2025-04-09'), type: 'REGULAR', isRecurring: true },
+    { name: 'Labor Day', date: new Date('2025-05-01'), endDate: new Date('2025-05-01'), type: 'REGULAR', isRecurring: true },
+    { name: 'Independence Day', date: new Date('2025-06-12'), endDate: new Date('2025-06-12'), type: 'REGULAR', isRecurring: true },
+    { name: 'National Heroes Day', date: new Date('2025-08-25'), endDate: new Date('2025-08-25'), type: 'REGULAR', isRecurring: true },
+    { name: 'Bonifacio Day', date: new Date('2025-11-30'), endDate: new Date('2025-11-30'), type: 'REGULAR', isRecurring: true },
+    { name: 'Christmas Day', date: new Date('2025-12-25'), endDate: new Date('2025-12-25'), type: 'REGULAR', isRecurring: true },
+    { name: 'Rizal Day', date: new Date('2025-12-30'), endDate: new Date('2025-12-30'), type: 'REGULAR', isRecurring: true },
   ];
 
   for (const h of holidays) {

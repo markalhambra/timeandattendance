@@ -6,6 +6,8 @@ import { settingsService } from './settings.service';
 export const NON_WORKING_HOLIDAY_TYPES = ['REGULAR', 'SPECIAL_NON_WORKING'] as const;
 
 const MIN_FILEABLE_OT_MINUTES = 60;
+/** Inclusive cap so a typo cannot mark months as a holiday. Covers a Christmas break. */
+export const MAX_HOLIDAY_RANGE_DAYS = 45;
 
 export type HolidayEffectResult = {
   attendanceUpdated: number;
@@ -56,6 +58,15 @@ function eachUtcDay(start: Date, end: Date): string[] {
   return days;
 }
 
+export function inclusiveDayCount(start: Date, end: Date): number {
+  return eachUtcDay(start, end).length;
+}
+
+/** Midnight-UTC dates from start through end, inclusive. */
+export function datesInRange(start: Date, end: Date): Date[] {
+  return eachUtcDay(start, end).map((iso) => parseDateOnly(iso)!);
+}
+
 function poolLeaveType(leaveType: LeaveType): LeaveType {
   return leaveType === 'EMERGENCY' ? 'SICK' : leaveType;
 }
@@ -66,7 +77,11 @@ export function isNonWorkingHolidayType(type: string): boolean {
 
 export async function getNonWorkingHoliday(date: Date) {
   return prisma.holiday.findFirst({
-    where: { date, type: { in: [...NON_WORKING_HOLIDAY_TYPES] } },
+    where: {
+      date: { lte: date },
+      endDate: { gte: date },
+      type: { in: [...NON_WORKING_HOLIDAY_TYPES] },
+    },
     orderBy: { name: 'asc' },
   });
 }
@@ -80,15 +95,20 @@ export async function isNonWorkingHoliday(date: Date): Promise<boolean> {
 export async function nonWorkingHolidayNamesBetween(start: Date, end: Date): Promise<Map<string, string>> {
   const rows = await prisma.holiday.findMany({
     where: {
-      date: { gte: start, lte: end },
+      date: { lte: end },
+      endDate: { gte: start },
       type: { in: [...NON_WORKING_HOLIDAY_TYPES] },
     },
     orderBy: { name: 'asc' },
   });
   const map = new Map<string, string>();
+  const windowStart = isoDateOnly(start);
+  const windowEnd = isoDateOnly(end);
   for (const row of rows) {
-    const key = isoDateOnly(row.date);
-    if (!map.has(key)) map.set(key, row.name);
+    for (const day of eachUtcDay(row.date, row.endDate)) {
+      if (day < windowStart || day > windowEnd || map.has(day)) continue;
+      map.set(day, row.name);
+    }
   }
   return map;
 }
@@ -286,6 +306,6 @@ export async function syncHolidayEffects(dates: Date[]): Promise<HolidayEffectRe
   return result;
 }
 
-export function serializeHoliday<T extends { date: Date }>(holiday: T) {
-  return { ...holiday, date: isoDateOnly(holiday.date) };
+export function serializeHoliday<T extends { date: Date; endDate: Date }>(holiday: T) {
+  return { ...holiday, date: isoDateOnly(holiday.date), endDate: isoDateOnly(holiday.endDate) };
 }

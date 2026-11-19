@@ -164,7 +164,7 @@ This page lets you view and manually adjust any employee's leave balance for any
 
 **Navigation:** Sidebar → **Holidays**
 
-Use this page to set company non-working holiday dates. You can add as many dates as you need, each with its own name.
+Use this page to set company non-working holidays. Each entry can be one day or a date range, such as a Christmas break from December 20 to January 3. Every day in the range is a non-working holiday.
 
 - Employees who clock in on that date have all worked time counted as overtime. A pending overtime record is created when the time is at least 1 hour, and it still needs approval.
 - Employees who do not clock in are not marked absent, and they do not get an absent reminder.
