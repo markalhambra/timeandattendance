@@ -174,7 +174,7 @@ export async function absenceReport(req: AuthRequest, res: Response): Promise<vo
       },
     });
 
-    const workingDays = workingDaysBetween(start, end);
+    const workingDays = await workingDaysBetween(start, end);
     const empIds = employees.map((e) => e.id);
     const leaveByEmp = await loadApprovedLeaveByDay(empIds, start, end);
     const ctoCdoByEmp = await loadApprovedCtoCdoByDay(empIds, start, end);

@@ -11,6 +11,7 @@ As an HR user, you have all Employee and Department Head features, plus tools to
 1. [HR Dashboard](#1-hr-dashboard)
 2. [Employee Management](#2-employee-management)
 3. [Leave Management and Balance Adjustments](#3-leave-management-and-balance-adjustments)
+   - [Holidays](#holidays)
 4. [Approvals](#4-approvals)
 5. [Reports](#5-reports)
 6. [Frequently Asked Questions](#6-frequently-asked-questions)
@@ -29,7 +30,7 @@ As an HR user, you have all Employee and Department Head features, plus tools to
 |---------|--------------|
 | Active Employees | Total employees in the system |
 | Present Today | Breakdown: On-Site, WFH, OB |
-| Absent Today | Employees with no clock-in (shown in red) |
+| Absent Today | Employees with no clock-in (shown in red). On a non-working holiday this stays at 0. |
 | Pending Approvals | Total requests waiting for review across all departments |
 | Attendance Breakdown Chart | Bar chart of today's statuses |
 | Department Attendance | Progress bars: present vs. total per department |
@@ -156,6 +157,19 @@ This page lets you view and manually adjust any employee's leave balance for any
 > **Tip:** Use adjustments for special grants (birthday leave, loyalty leave) or to correct errors after payroll processing.
 
 [Insert Screenshot: Leave Management Page]
+
+---
+
+## Holidays
+
+**Navigation:** Sidebar → **Holidays**
+
+Use this page to set company non-working holiday dates. You can add as many dates as you need, each with its own name.
+
+- Employees who clock in on that date have all worked time counted as overtime. A pending overtime record is created when the time is at least 1 hour, and it still needs approval.
+- Employees who do not clock in are not marked absent, and they do not get an absent reminder.
+- If a leave request covers a holiday date, that date is not charged against the leave balance. Adding or removing a holiday also adjusts existing pending or approved leave that overlaps that date.
+- Filed, approved, rejected, or converted overtime credits are not rewritten. The page warns you when those records are left as they are.
 
 ---
 

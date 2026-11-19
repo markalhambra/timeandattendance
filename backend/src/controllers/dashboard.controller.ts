@@ -5,6 +5,7 @@ import { phtToday, phtYear, phtMonth, phtMonthBounds } from '../utils/timezone';
 import { logger } from '../config/logger';
 import { getHeadedDepartments, getTeamEmployeeFilter } from '../utils/departmentHead';
 import { hasAnyRole, isHrOrAdmin } from '../utils/roles';
+import { getNonWorkingHoliday, isoDateOnly } from '../services/holiday.service';
 
 const LEAVE_BALANCE_DEFAULTS = {
   SICK: 15,
@@ -62,7 +63,7 @@ export async function employeeDashboard(req: AuthRequest, res: Response): Promis
 
     await ensureLeaveBalances(employeeId, year);
 
-    const [todayRecord, monthRecords, leaveBalances, pendingLeaves, overtimeCredits, pendingCorrections] = await Promise.all([
+    const [todayRecord, monthRecords, leaveBalances, pendingLeaves, overtimeCredits, pendingCorrections, todayHoliday] = await Promise.all([
       prisma.attendanceRecord.findUnique({ where: { employeeId_date: { employeeId, date: today } } }),
       prisma.attendanceRecord.findMany({ where: { employeeId, date: { gte: monthStart, lte: monthEnd } } }),
       prisma.leaveBalance.findMany({ where: { employeeId, year } }),
@@ -72,6 +73,7 @@ export async function employeeDashboard(req: AuthRequest, res: Response): Promis
         select: { id: true, minutes: true, approvedExpiry: true, date: true, startTime: true, endTime: true, status: true, isFiled: true, pendingExpiry: true, reason: true },
       }),
       prisma.attendanceCorrection.count({ where: { employeeId, status: 'PENDING' } }),
+      getNonWorkingHoliday(today),
     ]);
 
     const monthlySummary = {
@@ -98,6 +100,7 @@ export async function employeeDashboard(req: AuthRequest, res: Response): Promis
         pendingLeaves,
         overtimeCredit,
         pendingCorrections,
+        todayHoliday: todayHoliday ? { name: todayHoliday.name, date: isoDateOnly(todayHoliday.date) } : null,
       },
     });
   } catch (err: any) {
@@ -148,7 +151,7 @@ export async function deptHeadDashboard(req: AuthRequest, res: Response): Promis
     const today = phtToday();
     const where = { ...filter.employeeWhere, isActive: true, isArchived: false };
 
-    const [employees, todayAttendance, pendingLeaves, pendingOvertime, pendingCorrections] = await Promise.all([
+    const [employees, todayAttendance, pendingLeaves, pendingOvertime, pendingCorrections, todayHoliday] = await Promise.all([
       prisma.employee.count({ where }),
       prisma.attendanceRecord.findMany({
         where: { date: today, employee: where },
@@ -157,6 +160,7 @@ export async function deptHeadDashboard(req: AuthRequest, res: Response): Promis
       prisma.leaveRequest.count({ where: { status: 'PENDING', deptHeadStatus: null, employee: where } }),
       prisma.overtimeRecord.count({ where: { status: 'PENDING', employee: where } }),
       prisma.attendanceCorrection.count({ where: { status: 'PENDING', employee: where } }),
+      getNonWorkingHoliday(today),
     ]);
 
     const labelName = filter.labels.join(', ') || (headed[0]?.name ?? 'Team');
@@ -171,7 +175,7 @@ export async function deptHeadDashboard(req: AuthRequest, res: Response): Promis
         todayStats: {
           total: todayAttendance.length,
           present: todayAttendance.length,
-          absent: Math.max(0, employees - todayAttendance.length),
+          absent: todayHoliday ? 0 : Math.max(0, employees - todayAttendance.length),
           onsite: todayAttendance.filter((r) => r.status === 'ON_SITE').length,
           wfh: todayAttendance.filter((r) => r.status === 'WFH').length,
           ob: todayAttendance.filter((r) => r.status === 'OB').length,
@@ -180,6 +184,7 @@ export async function deptHeadDashboard(req: AuthRequest, res: Response): Promis
         pendingLeaves,
         pendingOvertimes: pendingOvertime,
         pendingCorrections,
+        todayHoliday: todayHoliday ? { name: todayHoliday.name, date: isoDateOnly(todayHoliday.date) } : null,
       },
     });
   } catch (err) {
@@ -192,7 +197,7 @@ export async function hrDashboard(_req: AuthRequest, res: Response): Promise<voi
   try {
     const today = phtToday();
 
-    const [totalEmployees, todayAttendance, pendingLeaves, pendingCorrections, departments] = await Promise.all([
+    const [totalEmployees, todayAttendance, pendingLeaves, pendingCorrections, departments, todayHoliday] = await Promise.all([
       prisma.employee.count({ where: { isActive: true, isArchived: false } }),
       prisma.attendanceRecord.findMany({
         where: { date: today, employee: { isArchived: false } },
@@ -207,9 +212,10 @@ export async function hrDashboard(_req: AuthRequest, res: Response): Promise<voi
         where: { isActive: true },
         include: { _count: { select: { employees: { where: { isActive: true, isArchived: false } } } } },
       }),
+      getNonWorkingHoliday(today),
     ]);
 
-    const absentCount = Math.max(0, totalEmployees - todayAttendance.length);
+    const absentCount = todayHoliday ? 0 : Math.max(0, totalEmployees - todayAttendance.length);
     const notYetIn = absentCount;
 
     res.json({
@@ -230,6 +236,7 @@ export async function hrDashboard(_req: AuthRequest, res: Response): Promise<voi
         pendingLeaves,
         pendingOvertimes: 0,
         pendingConversions: 0,
+        todayHoliday: todayHoliday ? { name: todayHoliday.name, date: isoDateOnly(todayHoliday.date) } : null,
         departments: departments.map((d) => ({
           id: d.id,
           name: d.name,
@@ -274,7 +281,8 @@ export async function adminDashboard(_req: AuthRequest, res: Response): Promise<
       }),
     ]);
 
-    const absentCount = totalEmployees - todayAttendanceCount;
+    const todayHoliday = await getNonWorkingHoliday(today);
+    const absentCount = todayHoliday ? 0 : totalEmployees - todayAttendanceCount;
 
     res.json({
       success: true,
@@ -287,6 +295,7 @@ export async function adminDashboard(_req: AuthRequest, res: Response): Promise<
           present: todayAttendanceCount,
           absent: absentCount,
         },
+        todayHoliday: todayHoliday ? { name: todayHoliday.name, date: isoDateOnly(todayHoliday.date) } : null,
         pendingRequests: {
           leaves: pendingLeaves,
           overtime: pendingOvertime,

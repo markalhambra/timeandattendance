@@ -3,6 +3,7 @@ import { prisma } from '../config/database';
 import { notificationService } from '../services/notification.service';
 import { logger } from '../config/logger';
 import { phtToday, phtYear } from '../utils/timezone';
+import { getNonWorkingHoliday } from '../services/holiday.service';
 
 // Days credited to REGULAR employees per month — single source of truth for all VL accrual logic
 const VL_ACCRUAL_AMOUNT = 1.25;
@@ -42,6 +43,14 @@ export async function cronAbsentCheck(req: Request, res: Response): Promise<void
       await prisma.employee.count({ where: { isActive: true } });
       logger.info('Cron absent-check: weekend ping — DB kept alive.');
       res.json({ success: true, notified: 0, note: 'Weekend — DB pinged only.' });
+      return;
+    }
+
+    const holiday = await getNonWorkingHoliday(today);
+    if (holiday) {
+      await prisma.employee.count({ where: { isActive: true } });
+      logger.info(`Cron absent-check: holiday (${holiday.name}) — skipping notifications.`);
+      res.json({ success: true, notified: 0, note: `Holiday — ${holiday.name}` });
       return;
     }
 

@@ -1,5 +1,6 @@
 import { ApprovalStatus, AttendanceStatus } from '@prisma/client';
 import { prisma } from '../config/database';
+import { nonWorkingHolidayNamesBetween } from '../services/holiday.service';
 
 export const LEAVE_TYPE_LABEL: Record<string, string> = {
   SICK: 'Sick Leave',
@@ -44,8 +45,9 @@ function isWeekday(iso: string): boolean {
   return dow !== 0 && dow !== 6;
 }
 
-export function workingDaysBetween(start: Date, end: Date): string[] {
-  return eachUtcDay(start, end).filter(isWeekday);
+export async function workingDaysBetween(start: Date, end: Date): Promise<string[]> {
+  const holidays = await nonWorkingHolidayNamesBetween(start, end);
+  return eachUtcDay(start, end).filter((iso) => isWeekday(iso) && !holidays.has(iso));
 }
 
 function leaveStatusLabel(leaveType: string, leaveDuration?: string | null): string {
@@ -207,7 +209,8 @@ export async function buildDailyAttendanceRows(
   const ctoCdoByEmp = status
     ? new Map<string, Map<string, string>>()
     : await loadApprovedCtoCdoByDay(ids, start, end);
-  const workingDays = workingDaysBetween(start, end);
+  const holidayNames = await nonWorkingHolidayNamesBetween(start, end);
+  const workingDays = await workingDaysBetween(start, end);
   const empById = new Map(employees.map((e) => [e.id, e]));
   const rows: DailyAttendanceRow[] = [];
 
@@ -246,6 +249,20 @@ export async function buildDailyAttendanceRows(
           'Overtime Hours': '',
         });
       }
+      for (const [day, name] of holidayNames) {
+        if (!isWeekday(day) || present.has(day)) continue;
+        rows.push({
+          Date: day,
+          Name: `${emp.firstName} ${emp.lastName}`,
+          'Employee Number': emp.employeeNumber,
+          Department: emp.department?.name ?? '—',
+          Status: `Holiday — ${name}`,
+          'Clock In': '',
+          'Clock Out': '',
+          'Working Hours': '',
+          'Overtime Hours': '',
+        });
+      }
     }
   }
 
@@ -272,6 +289,7 @@ function chartBucket(status: string): 'onsite' | 'wfh' | 'ob' | 'leave' | 'cto' 
 export function chartFromDailyRows(rows: DailyAttendanceRow[]) {
   const byDate = new Map<string, { onsite: number; wfh: number; ob: number; leave: number; cto: number; cdo: number; absent: number }>();
   for (const row of rows) {
+    if (row.Status.startsWith('Holiday')) continue;
     if (!byDate.has(row.Date)) byDate.set(row.Date, { onsite: 0, wfh: 0, ob: 0, leave: 0, cto: 0, cdo: 0, absent: 0 });
     const entry = byDate.get(row.Date)!;
     entry[chartBucket(row.Status)]++;

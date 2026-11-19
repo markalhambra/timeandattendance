@@ -73,6 +73,8 @@ Welcome! This guide walks you through everything available to you as an Employee
 
 **Navigation:** After logging in you land here automatically, or click **Dashboard** in the sidebar.
 
+If today is a non-working holiday set by HR, the dashboard shows the holiday name. Time you work that day counts as overtime. Staying out is not marked absent.
+
 | Section | What It Shows |
 |---------|--------------|
 | Clock Widget | Clock In and Clock Out buttons |

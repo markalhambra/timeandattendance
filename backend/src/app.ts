@@ -23,6 +23,7 @@ import { auditRoutes } from './routes/audit.routes';
 import { cronRoutes } from './routes/cron.routes';
 import { settingsRoutes } from './routes/settings.routes';
 import { payrollRoutes } from './routes/payroll.routes';
+import { holidayRoutes } from './routes/holiday.routes';
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -101,6 +102,7 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/audit-logs', auditRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/payroll', payrollRoutes);
+app.use('/api/holidays', holidayRoutes);
 app.use('/api/cron', cronRoutes);
 
 // ─── 404 Handler ──────────────────────────────────────────────────────────

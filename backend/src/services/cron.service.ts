@@ -3,6 +3,7 @@ import { prisma } from '../config/database';
 import { notificationService } from './notification.service';
 import { logger } from '../config/logger';
 import { phtToday, phtYear } from '../utils/timezone';
+import { isNonWorkingHoliday } from './holiday.service';
 
 // Days credited to REGULAR employees per month — single source of truth for all VL accrual logic
 const VL_ACCRUAL_AMOUNT = 1.25;
@@ -15,6 +16,10 @@ export function scheduleCronJobs(): void {
     logger.info('Cron: Checking absent employees...');
     try {
       const today = phtToday();
+      if (await isNonWorkingHoliday(today)) {
+        logger.info('Cron: today is a non-working holiday — skipping absent notifications.');
+        return;
+      }
 
       const employees = await prisma.employee.findMany({
         where: { isActive: true },

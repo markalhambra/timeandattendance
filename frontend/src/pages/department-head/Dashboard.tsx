@@ -8,6 +8,7 @@ interface DeptDashboardData {
   department: { id: string; name: string } | null;
   departments?: { id: string; name: string }[];
   todayStats: { total: number; present: number; absent: number; onsite: number; wfh: number; ob: number };
+  todayHoliday?: { name: string; date: string } | null;
   todayRecords: (AttendanceRecord & { employee: { firstName: string; lastName: string; employeeNumber: string } })[];
   pendingLeaves: number;
   pendingOvertimes: number;
@@ -61,6 +62,7 @@ export default function DeptHeadDashboard() {
         <div className="stat-card">
           <div className="text-xs text-gray-500 uppercase tracking-wide font-semibold">Absent</div>
           <div className="text-3xl font-black text-red-600">{s?.absent ?? 0}</div>
+          {data?.todayHoliday?.name && <div className="text-xs text-amber-700 mt-1">Holiday: {data.todayHoliday.name}</div>}
         </div>
         <div className={`stat-card ${pendingTotal > 0 ? 'border-black' : ''}`}>
           <div className="text-xs text-gray-500 uppercase tracking-wide font-semibold">Pending Approvals</div>

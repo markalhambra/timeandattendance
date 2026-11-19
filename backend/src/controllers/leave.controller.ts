@@ -7,6 +7,7 @@ import { phtYear, phtMonth } from '../utils/timezone';
 import { canReviewAsDeptTier, getApprovalEmployeeWhere, getHeadedDepartmentIds } from '../utils/departmentHead';
 import { getReviewerLabel } from '../utils/reviewerLabel';
 import { hasAnyRole, isHrOrAdmin as userIsHrOrAdmin } from '../utils/roles';
+import { countLeaveDays } from '../services/holiday.service';
 
 const LEAVE_BALANCE_DEFAULTS: Record<LeaveType, number> = {
   SICK: 15,
@@ -87,7 +88,11 @@ export async function fileLeave(req: AuthRequest, res: Response): Promise<void> 
       return;
     }
 
-    const totalDays = isHalfDay ? 0.5 : Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+    const totalDays = await countLeaveDays(start, end, isHalfDay);
+    if (totalDays <= 0) {
+      res.status(400).json({ success: false, message: 'Selected dates are non-working holidays and cannot be charged as leave.' });
+      return;
+    }
 
     // Soft per-request caps for special leave types
     if (leaveType === 'CALAMITY' && totalDays > 3) {

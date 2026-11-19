@@ -18,6 +18,7 @@ interface DashboardData {
   pendingLeaves: number;
   overtimeCredit: { totalMinutes: number; count: number; records: OvertimeRecord[] };
   pendingCorrections: number;
+  todayHoliday: { name: string; date: string } | null;
 }
 
 function StatCard({ label, value, sub, color = '' }: { label: string; value: string | number; sub?: string; color?: string }) {
@@ -70,6 +71,11 @@ export default function EmployeeDashboard() {
       <div>
         <h1 className="text-2xl font-black">My Dashboard</h1>
         <p className="text-sm text-gray-500 mt-0.5">{today}</p>
+        {data?.todayHoliday?.name && (
+          <p className="mt-2 inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-sm font-semibold text-amber-900">
+            Holiday: {data.todayHoliday.name}
+          </p>
+        )}
       </div>
 
       {/* Main grid */}

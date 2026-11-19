@@ -54,6 +54,12 @@ export default function ClockWidget() {
     refetchIntervalInBackground: false,
   });
 
+  const { data: todayHoliday } = useQuery<{ name: string; date: string } | null>({
+    queryKey: ['holiday-today'],
+    queryFn: () => api.get('/holidays/today').then((r) => r.data.data),
+    staleTime: 60_000,
+  });
+
   const { data: officeSettings } = useQuery<{ lat: number; lng: number; radiusMeters: number }>({
     queryKey: ['office-settings'],
     queryFn: () => api.get('/settings/office').then((r) => r.data.data),
@@ -199,6 +205,9 @@ export default function ClockWidget() {
           <div className="text-sm text-gray-500 mt-1">
             {hasClockedIn && !hasClockedOut ? 'Working time' : hasClockedOut ? 'Shift completed' : 'Not clocked in'}
           </div>
+          {todayHoliday?.name && (
+            <div className="text-sm font-semibold text-amber-800 mt-2">Holiday: {todayHoliday.name}. Time worked counts as overtime.</div>
+          )}
         </div>
 
         {/* Clock info */}

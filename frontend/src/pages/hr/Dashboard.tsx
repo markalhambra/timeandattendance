@@ -9,6 +9,7 @@ interface HRDashboardData {
   activeEmployees: number;
   totalDepartments: number;
   todayStats: { present: number; absent: number; onsite: number; wfh: number; ob: number; notYetIn: number };
+  todayHoliday: { name: string; date: string } | null;
   pendingLeaves: number;
   pendingOvertimes: number;
   pendingConversions: number;
@@ -123,6 +124,7 @@ export default function HRDashboard() {
         <div className="stat-card">
           <div className="text-xs text-gray-500 uppercase tracking-wide font-semibold">Absent Today</div>
           <div className="text-3xl font-black text-red-600">{t?.absent ?? 0}</div>
+          {data?.todayHoliday?.name && <div className="text-xs text-amber-700 mt-1">Holiday: {data.todayHoliday.name}</div>}
         </div>
         <div className={`stat-card ${pendingTotal > 0 ? 'border-black' : ''}`}>
           <div className="text-xs text-gray-500 uppercase tracking-wide font-semibold">Pending Approvals</div>

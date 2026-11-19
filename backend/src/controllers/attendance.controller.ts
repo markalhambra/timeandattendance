@@ -8,6 +8,7 @@ import { canReviewAsDeptTier, getApprovalEmployeeWhere, getHeadedDepartmentIds }
 import { getReviewerLabel } from '../utils/reviewerLabel';
 import { settingsService } from '../services/settings.service';
 import { hasAnyRole, isHrOrAdmin } from '../utils/roles';
+import { isNonWorkingHoliday, overtimeMinutesForWorkedDay } from '../services/holiday.service';
 
 const MIN_FILEABLE_OT_MINUTES = 60; // 1 hour minimum to create/file OT
 
@@ -162,10 +163,7 @@ export async function clockOut(req: AuthRequest, res: Response): Promise<void> {
 
     const now = new Date();
     const workingMinutes = Math.floor((now.getTime() - record.clockIn.getTime()) / 60000);
-    const dayOfWeek = record.date.getUTCDay(); // 0 = Sunday, 6 = Saturday
-    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-    const otThresholdMinutes = isWeekend ? 0 : await settingsService.getOtThresholdMinutes();
-    const overtimeMinutes = isWeekend ? workingMinutes : Math.max(0, workingMinutes - otThresholdMinutes);
+    const overtimeMinutes = await overtimeMinutesForWorkedDay(record.date, workingMinutes);
 
     const updated = await prisma.attendanceRecord.update({
       where: { id: record.id },
@@ -495,11 +493,8 @@ export async function reviewCorrection(req: AuthRequest, res: Response): Promise
         const workingMinutes = Math.floor(
           (effectiveClockOut.getTime() - effectiveClockIn.getTime()) / 60000,
         );
-        const correctionDow = correction.attendance.date.getUTCDay();
-        const correctionIsWeekend = correctionDow === 0 || correctionDow === 6;
-        const otThresholdMinutes = correctionIsWeekend ? 0 : await settingsService.getOtThresholdMinutes();
         updateData.workingMinutes = workingMinutes;
-        updateData.overtimeMinutes = correctionIsWeekend ? workingMinutes : Math.max(0, workingMinutes - otThresholdMinutes);
+        updateData.overtimeMinutes = await overtimeMinutesForWorkedDay(correction.attendance.date, workingMinutes);
       }
 
       // mark attendance as manually corrected
@@ -626,6 +621,10 @@ export async function getEmployeeAttendance(req: AuthRequest, res: Response): Pr
 export async function getAbsentToday(req: AuthRequest, res: Response): Promise<void> {
   try {
     const today = phtToday();
+    if (await isNonWorkingHoliday(today)) {
+      res.json({ success: true, data: [], holiday: true });
+      return;
+    }
 
     const absent = await prisma.employee.findMany({
       where: {
