@@ -373,12 +373,17 @@ export async function reviewOvertime(req: AuthRequest, res: Response): Promise<v
 }
 
 export async function getConversions(req: AuthRequest, res: Response): Promise<void> {
-  const { status, departmentId, conversionType, page = '1', limit = '50' } = req.query as Record<string, string>;
+  const { status, departmentId, conversionType, startDate, endDate, page = '1', limit = '50' } = req.query as Record<string, string>;
   const skip = (parseInt(page) - 1) * parseInt(limit);
   try {
     const where: any = {};
     if (status) where.status = status;
     if (conversionType) where.conversionType = conversionType;
+    if (startDate || endDate) {
+      where.scheduledDate = {};
+      if (startDate) where.scheduledDate.gte = new Date(startDate);
+      if (endDate) where.scheduledDate.lte = new Date(endDate);
+    }
     // Dept head / MD: scoped; HR/Admin: all employees
     if (!isHrOrAdmin(req.user) && hasAnyRole(req.user, 'DEPARTMENT_HEAD', 'MANAGING_DIRECTOR')) {
       const empWhere = await getApprovalEmployeeWhere({

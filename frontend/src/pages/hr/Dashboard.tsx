@@ -53,7 +53,7 @@ export default function HRDashboard() {
     queryKey: ['hr-sched-conversions', start, end, schedDept, schedType],
     queryFn: () => {
       if (schedType && !isConvFilter) return Promise.resolve([]);
-      const params = new URLSearchParams({ status: 'APPROVED', limit: '200' });
+      const params = new URLSearchParams({ status: 'APPROVED', startDate: start, endDate: end, limit: '200' });
       if (schedDept) params.set('departmentId', schedDept);
       if (schedType) params.set('conversionType', schedType);
       return api.get(`/overtime/conversions?${params}`).then((r) => r.data.data);
@@ -75,8 +75,15 @@ export default function HRDashboard() {
     VAWC: 'VAWC Leave',
   };
 
+  const dateOnly = (value?: string | null) => (value ? value.slice(0, 10) : '');
+  const overlapsMonth = (itemStart?: string | null, itemEnd?: string | null) => {
+    const from = dateOnly(itemStart);
+    const to = dateOnly(itemEnd || itemStart);
+    return Boolean(from && to && from <= end && to >= start);
+  };
+
   const allItems: any[] = useMemo(() => [
-    ...(schedLeaves ?? []).map((l: any) => ({
+    ...(schedLeaves ?? []).filter((l: any) => overlapsMonth(l.startDate, l.endDate)).map((l: any) => ({
       key: `l-${l.id}`, kind: 'leave',
       employee: `${l.employee?.firstName ?? ''} ${l.employee?.lastName ?? ''}`.trim(),
       dept: l.employee?.department?.name ?? '—',
@@ -85,7 +92,7 @@ export default function HRDashboard() {
       sortDate: l.startDate,
       badge: 'bg-blue-50 text-blue-700',
     })),
-    ...(schedConversions ?? []).filter((c: any) => c.scheduledDate).map((c: any) => ({
+    ...(schedConversions ?? []).filter((c: any) => overlapsMonth(c.scheduledDate, c.scheduledDate)).map((c: any) => ({
       key: `c-${c.id}`, kind: 'conversion',
       employee: `${c.employee?.firstName ?? ''} ${c.employee?.lastName ?? ''}`.trim(),
       dept: c.employee?.department?.name ?? '—',
@@ -94,7 +101,7 @@ export default function HRDashboard() {
       sortDate: c.scheduledDate,
       badge: c.conversionType === 'CTO' ? 'bg-amber-50 text-amber-700' : 'bg-orange-50 text-orange-700',
     })),
-  ].sort((a, b) => (a.sortDate < b.sortDate ? -1 : a.sortDate > b.sortDate ? 1 : 0)), [schedLeaves, schedConversions]);
+  ].sort((a, b) => (a.sortDate < b.sortDate ? -1 : a.sortDate > b.sortDate ? 1 : 0)), [schedLeaves, schedConversions, start, end]);
 
   const t = data?.todayStats;
   const pendingTotal = (data?.pendingLeaves || 0) + (data?.pendingOvertimes || 0) + (data?.pendingConversions || 0);
