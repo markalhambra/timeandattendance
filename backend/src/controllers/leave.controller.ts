@@ -8,49 +8,8 @@ import { canReviewAsDeptTier, getApprovalEmployeeWhere, getHeadedDepartmentIds }
 import { getReviewerLabel } from '../utils/reviewerLabel';
 import { hasAnyRole, isHrOrAdmin as userIsHrOrAdmin } from '../utils/roles';
 import { countLeaveDays } from '../services/holiday.service';
-
-const LEAVE_BALANCE_DEFAULTS: Record<LeaveType, number> = {
-  SICK: 15,
-  VACATION: 15,
-  PML: 7,
-  SML: 7,
-  EMERGENCY: 15,
-  SOLO_PARENT: 7,
-  MATERNITY: 105,
-  PATERNITY: 7,
-  BEREAVEMENT: 5,
-  MAGNA_CARTA_WOMEN: 60,
-  CALAMITY: 3,
-  VAWC: 10,
-  LWOP: 0, // no balance tracking — unpaid leave
-};
-
-const LEAVE_TYPES = Object.keys(LEAVE_BALANCE_DEFAULTS) as LeaveType[];
-
-// SICK and EMERGENCY share one 15-day pool; all balance ops use the SICK row.
-function poolLeaveType(lt: LeaveType): LeaveType {
-  return lt === 'EMERGENCY' ? 'SICK' : lt;
-}
-
-async function ensureLeaveBalances(employeeId: string, year: number): Promise<void> {
-  const existing = await prisma.leaveBalance.count({ where: { employeeId, year } });
-  if (existing >= LEAVE_TYPES.length) return;
-
-  // Carry forward remaining balance from previous year if it exists; otherwise use defaults (new employee)
-  const prevBalances = await prisma.leaveBalance.findMany({ where: { employeeId, year: year - 1 } });
-  const prevMap = new Map(prevBalances.map((b) => [b.leaveType, b]));
-
-  await prisma.leaveBalance.createMany({
-    data: LEAVE_TYPES.map((leaveType) => {
-      const prev = prevMap.get(leaveType);
-      const totalDays = prev
-        ? Math.max(0, prev.totalDays - prev.usedDays - prev.pendingDays)
-        : LEAVE_BALANCE_DEFAULTS[leaveType];
-      return { employeeId, year, leaveType, totalDays };
-    }),
-    skipDuplicates: true,
-  });
-}
+import { ensureLeaveBalances, emergencyUsageForYear, presentEmployeeLeaveBalances } from '../services/leaveBalance.service';
+import { evaluateEmergencyFiling, poolLeaveType, remainingDays, requestedExceeds } from '../utils/leaveCredits';
 
 export async function fileLeave(req: AuthRequest, res: Response): Promise<void> {
   const { leaveType, startDate, endDate, reason, leaveDuration = 'FULL_DAY' } = req.body;
@@ -113,8 +72,16 @@ export async function fileLeave(req: AuthRequest, res: Response): Promise<void> 
       const balance = await prisma.leaveBalance.findUnique({
         where: { employeeId_year_leaveType: { employeeId, year, leaveType: poolType } },
       });
+      const poolRemaining = balance ? remainingDays(balance) : 0;
 
-      if (!balance || (balance.totalDays - balance.usedDays - balance.pendingDays) < totalDays) {
+      if (leaveType === 'EMERGENCY') {
+        const usage = await emergencyUsageForYear(employeeId, year);
+        const decision = evaluateEmergencyFiling({ requestedDays: totalDays, poolRemaining, usage });
+        if (!decision.ok) {
+          res.status(400).json({ success: false, message: decision.message });
+          return;
+        }
+      } else if (!balance || requestedExceeds(totalDays, poolRemaining)) {
         res.status(400).json({ success: false, message: 'Insufficient leave balance.' });
         return;
       }
@@ -174,17 +141,6 @@ export async function getMyLeaves(req: AuthRequest, res: Response): Promise<void
   }
 }
 
-// SICK and EMERGENCY share one pool — mirror SICK values onto the EMERGENCY row
-function mirrorEmergencyBalance(balances: any[]): any[] {
-  const sick = balances.find((b) => b.leaveType === 'SICK');
-  if (!sick) return balances;
-  return balances.map((b) =>
-    b.leaveType === 'EMERGENCY'
-      ? { ...b, totalDays: sick.totalDays, usedDays: sick.usedDays, pendingDays: sick.pendingDays }
-      : b,
-  );
-}
-
 export async function getMyBalances(req: AuthRequest, res: Response): Promise<void> {
   const employeeId = req.user!.employeeId;
   if (!employeeId) { res.status(400).json({ success: false, message: 'Employee not found.' }); return; }
@@ -192,7 +148,7 @@ export async function getMyBalances(req: AuthRequest, res: Response): Promise<vo
   try {
     await ensureLeaveBalances(employeeId, year);
     const balances = await prisma.leaveBalance.findMany({ where: { employeeId, year } });
-    res.json({ success: true, data: mirrorEmergencyBalance(balances) });
+    res.json({ success: true, data: await presentEmployeeLeaveBalances(employeeId, year, balances) });
   } catch {
     res.status(500).json({ success: false, message: 'Failed to fetch balances.' });
   }
@@ -470,7 +426,7 @@ export async function getEmployeeLeaveBalances(req: AuthRequest, res: Response):
 
     await ensureLeaveBalances(employeeId, year);
     const balances = await prisma.leaveBalance.findMany({ where: { employeeId, year } });
-    res.json({ success: true, data: mirrorEmergencyBalance(balances), employee });
+    res.json({ success: true, data: await presentEmployeeLeaveBalances(employeeId, year, balances), employee });
   } catch {
     res.status(500).json({ success: false, message: 'Failed to fetch employee leave balances.' });
   }
@@ -499,22 +455,27 @@ export async function adjustLeaveBalance(req: AuthRequest, res: Response): Promi
     const employee = await prisma.employee.findUnique({ where: { id: employeeId }, select: { id: true } });
     if (!employee) { res.status(404).json({ success: false, message: 'Employee not found.' }); return; }
 
+    if (leaveType === 'EMERGENCY') {
+      res.status(400).json({
+        success: false,
+        message: 'Emergency Leave is capped at 3 days per year and is taken from Sick Leave. Adjust Sick Leave to change the shared pool.',
+      });
+      return;
+    }
+
     await ensureLeaveBalances(employeeId, year);
 
-    // SICK and EMERGENCY share a pool — adjust SICK row for both
-    const targetType = poolLeaveType(leaveType as LeaveType);
-
     const balance = await prisma.leaveBalance.findUnique({
-      where: { employeeId_year_leaveType: { employeeId, year, leaveType: targetType } },
+      where: { employeeId_year_leaveType: { employeeId, year, leaveType: leaveType as LeaveType } },
     });
     if (!balance) { res.status(404).json({ success: false, message: 'Leave balance not found.' }); return; }
 
-    const previousBalance = balance.totalDays - balance.usedDays - balance.pendingDays;
+    const previousBalance = remainingDays(balance);
     const newTotalDays = Math.max(0, balance.totalDays + adjustmentAmount);
     const newBalance = newTotalDays - balance.usedDays - balance.pendingDays;
 
     await prisma.leaveBalance.update({
-      where: { employeeId_year_leaveType: { employeeId, year, leaveType: targetType } },
+      where: { employeeId_year_leaveType: { employeeId, year, leaveType: leaveType as LeaveType } },
       data: { totalDays: newTotalDays },
     });
 

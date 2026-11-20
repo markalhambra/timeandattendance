@@ -152,7 +152,7 @@ This page lets you view and manually adjust any employee's leave balance for any
 3. Click **Submit Adjustment**.
 4. The change is recorded in the **Adjustment History** table below.
 
-> **Note:** Emergency Leave and Sick Leave share one balance pool of 15 days. Adjusting one affects both.
+> **Note:** Sick Leave is a 12-day pool. Emergency Leave can use at most 3 of those days and cannot be adjusted on its own. Adjust Sick Leave to change the pool. Unused emergency days remain available as Sick Leave. The Emergency Leave card shows remaining days out of 3 and does not shrink when Sick Leave is low. Filing still requires enough Sick Leave credits.
 
 > **Tip:** Use adjustments for special grants (birthday leave, loyalty leave) or to correct errors after payroll processing.
 

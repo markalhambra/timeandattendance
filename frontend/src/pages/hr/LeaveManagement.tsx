@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../services/api';
 import type { Employee, LeaveBalance, LeaveAdjustment, LeaveType } from '../../types';
+import { displayedLeaveCredit } from '../../utils/leaveCredits';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -46,15 +47,15 @@ async function fetchAdjustments(employeeId: string): Promise<LeaveAdjustment[]> 
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-function AvailableDays({ balance }: { balance: LeaveBalance }) {
-  const available = balance.totalDays - balance.usedDays - balance.pendingDays;
-  const pct = balance.totalDays > 0 ? Math.min(100, (available / balance.totalDays) * 100) : 0;
+function AvailableDays({ balance, sickBalance }: { balance: LeaveBalance; sickBalance?: LeaveBalance }) {
+  const credit = displayedLeaveCredit(balance.leaveType, balance, sickBalance);
+  const pct = credit.total > 0 ? Math.min(100, (credit.available / credit.total) * 100) : 0;
   const color = pct > 50 ? 'bg-emerald-500' : pct > 20 ? 'bg-amber-500' : 'bg-red-500';
   return (
     <div className="space-y-1">
       <div className="flex justify-between text-xs text-gray-500">
-        <span>{available.toFixed(2)} / {balance.totalDays.toFixed(2)} days</span>
-        <span className="text-gray-400">Used: {balance.usedDays.toFixed(2)} | Pending: {balance.pendingDays.toFixed(2)}</span>
+        <span>{credit.available.toFixed(2)} / {credit.total.toFixed(2)} days</span>
+        <span className="text-gray-400">Used: {credit.used.toFixed(2)} | Pending: {credit.pending.toFixed(2)}</span>
       </div>
       <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
         <div className={`h-full rounded-full transition-all ${color}`} style={{ width: `${pct}%` }} />
@@ -257,13 +258,17 @@ export default function HrLeaveManagement() {
                   <div className="divide-y divide-gray-50">
                     {ADJUSTABLE_LEAVE_TYPES.map((lt) => {
                       const bal = balances.find((b) => b.leaveType === lt);
-                      const available = bal ? bal.totalDays - bal.usedDays - bal.pendingDays : 0;
+                      const sick = balances.find((b) => b.leaveType === 'SICK');
+                      const available = bal ? displayedLeaveCredit(lt, bal, sick).available : 0;
                       return (
                         <div key={lt} className="px-4 py-3 flex items-center gap-4">
                           <div className="w-48 flex-shrink-0">
                             <div className="text-sm font-medium text-gray-700">{LEAVE_TYPE_LABELS[lt]}</div>
-                            {bal && <AvailableDays balance={bal} />}
+                            {bal && <AvailableDays balance={bal} sickBalance={sick} />}
                             {!bal && <div className="text-xs text-gray-400">No balance record</div>}
+                            {lt === 'EMERGENCY' && (
+                              <div className="text-[10px] text-gray-400 mt-1">Max 3 days, taken from Sick Leave. Not adjustable.</div>
+                            )}
                           </div>
                           <div className="flex-1 text-right">
                             <span className={`text-lg font-bold ${available < 0 ? 'text-red-600' : 'text-gray-800'}`}>
@@ -271,12 +276,16 @@ export default function HrLeaveManagement() {
                             </span>
                             <span className="text-xs text-gray-400 ml-1">days avail.</span>
                           </div>
-                          <button
-                            onClick={() => openAdjustModal(lt)}
-                            className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs rounded-lg font-medium transition-colors flex-shrink-0"
-                          >
-                            Adjust
-                          </button>
+                          {lt === 'EMERGENCY' ? (
+                            <span className="px-3 py-1.5 text-xs text-gray-400 flex-shrink-0">Capped</span>
+                          ) : (
+                            <button
+                              onClick={() => openAdjustModal(lt)}
+                              className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs rounded-lg font-medium transition-colors flex-shrink-0"
+                            >
+                              Adjust
+                            </button>
+                          )}
                         </div>
                       );
                     })}
@@ -362,7 +371,7 @@ export default function HrLeaveManagement() {
                   onChange={(e) => setAdjustForm((f) => ({ ...f, leaveType: e.target.value as LeaveType }))}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
-                  {ADJUSTABLE_LEAVE_TYPES.map((lt) => (
+                  {ADJUSTABLE_LEAVE_TYPES.filter((lt) => lt !== 'EMERGENCY').map((lt) => (
                     <option key={lt} value={lt}>{LEAVE_TYPE_LABELS[lt]}</option>
                   ))}
                 </select>

@@ -209,7 +209,7 @@ If today is a non-working holiday set by HR, the dashboard shows the holiday nam
 |-----------|-------------|
 | Vacation Leave (VL) | Personal time off |
 | Sick Leave (SL) | Illness or medical appointments |
-| Emergency Leave | Urgent personal or family situations. Shares the 15-day Sick Leave balance. |
+| Emergency Leave | Urgent personal or family situations. Up to 3 days per year, taken from the 12-day Sick Leave balance. Unused emergency days can still be used as Sick Leave. |
 | Pamilya Muna Leave (PML) | Family-related leave |
 | Solo Parent Leave | For employees with a valid Solo Parent ID |
 | Special Leave for Women (RA 9170) | Special leave for women under RA 9170 |
@@ -221,7 +221,7 @@ If today is a non-working holiday set by HR, the dashboard shows the holiday nam
 
 > **Tenure Requirement:** Most leave types require at least **6 months of employment**. If you are under 6 months, only **LWOP** is available. A "File LWOP" button appears on the Leave page.
 
-> **Common Error — "Insufficient balance":** Emergency Leave uses your Sick Leave balance. They share a combined pool of 15 days. Check your available balance before filing.
+> **Common Error — "Insufficient balance":** Emergency Leave uses your Sick Leave balance and is limited to 3 days per year. It does not add days on top of Sick Leave. Check both your Sick Leave balance and how many emergency days you have already filed.
 
 [Insert Screenshot: Leave Filing Form]
 
@@ -239,6 +239,8 @@ The Leave Balances section shows a grid of all leave types with:
 - **Available Days** — days you can still use
 - **Total Days** — your full allocation for the year
 - **Pending Days** — days waiting for approval (reserved from your available total)
+
+Emergency Leave always shows remaining days out of 3. That number goes down only for emergency days already filed or pending, not when Sick Leave is low. Filing can still be rejected if Sick Leave does not have enough days left.
 
 **To cancel a pending leave request:**
 Find the request in the leave history table below the balances and click **Cancel**. This only works while the status is **Pending**.

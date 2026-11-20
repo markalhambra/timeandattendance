@@ -201,7 +201,7 @@ The system detects whether an employee is within **200 meters** of the office. I
 All passwords must be at least 8 characters and contain at least one uppercase letter, one lowercase letter, and one number.
 
 ### Leave Balance Rules
-- Emergency Leave and Sick Leave share a **15-day pool** per year.
+- Sick Leave is a **12-day pool**. Emergency Leave can use at most **3** of those days per year and does not add extra days.
 - LWOP (Leave Without Pay) does not require any balance and is always available.
 - New employees cannot file most leave types until they have **6 months of tenure**.
 

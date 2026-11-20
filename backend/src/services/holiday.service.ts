@@ -68,6 +68,7 @@ export function datesInRange(start: Date, end: Date): Date[] {
 }
 
 function poolLeaveType(leaveType: LeaveType): LeaveType {
+  // Emergency days are charged to the sick pool. The yearly cap is enforced from requests.
   return leaveType === 'EMERGENCY' ? 'SICK' : leaveType;
 }
 

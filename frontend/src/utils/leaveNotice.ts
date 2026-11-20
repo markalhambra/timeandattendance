@@ -18,7 +18,7 @@ export const LEAVE_TYPE_META: Record<
   SICK: { label: 'Sick Leave', notice: 'Notify (no advance notice required)' },
   EMERGENCY: {
     label: 'Emergency Leave',
-    notice: 'Notify (no advance notice required)',
+    notice: 'Notify (no advance notice required). Up to 3 days per year, taken from Sick Leave.',
   },
   BEREAVEMENT: {
     label: 'Bereavement Leave',

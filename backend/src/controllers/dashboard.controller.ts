@@ -6,50 +6,7 @@ import { logger } from '../config/logger';
 import { getHeadedDepartments, getTeamEmployeeFilter } from '../utils/departmentHead';
 import { hasAnyRole, isHrOrAdmin } from '../utils/roles';
 import { getNonWorkingHoliday, isoDateOnly } from '../services/holiday.service';
-
-const LEAVE_BALANCE_DEFAULTS = {
-  SICK: 15,
-  VACATION: 15,
-  PML: 7,
-  SML: 7,
-  EMERGENCY: 15,
-  SOLO_PARENT: 7,
-  MATERNITY: 105,
-  PATERNITY: 7,
-  BEREAVEMENT: 5,
-  MAGNA_CARTA_WOMEN: 60,
-  CALAMITY: 3,
-  VAWC: 10,
-} as const;
-
-const LEAVE_TYPES = Object.keys(LEAVE_BALANCE_DEFAULTS) as Array<keyof typeof LEAVE_BALANCE_DEFAULTS>;
-
-// SICK and EMERGENCY share one pool — mirror SICK values onto the EMERGENCY row
-function mirrorEmergencyBalance(balances: any[]): any[] {
-  const sick = balances.find((b: any) => b.leaveType === 'SICK');
-  if (!sick) return balances;
-  return balances.map((b: any) =>
-    b.leaveType === 'EMERGENCY'
-      ? { ...b, totalDays: sick.totalDays, usedDays: sick.usedDays, pendingDays: sick.pendingDays }
-      : b,
-  );
-}
-
-async function ensureLeaveBalances(employeeId: string, year: number): Promise<void> {
-  // Check if all balances exist before running createMany
-  const existing = await prisma.leaveBalance.count({ where: { employeeId, year } });
-  if (existing >= LEAVE_TYPES.length) return; // already initialized
-  // Use createMany with skipDuplicates — single query, safe with connection_limit=1
-  await prisma.leaveBalance.createMany({
-    data: LEAVE_TYPES.map((leaveType) => ({
-      employeeId,
-      year,
-      leaveType,
-      totalDays: LEAVE_BALANCE_DEFAULTS[leaveType],
-    })),
-    skipDuplicates: true,
-  });
-}
+import { ensureLeaveBalances, presentEmployeeLeaveBalances } from '../services/leaveBalance.service';
 
 export async function employeeDashboard(req: AuthRequest, res: Response): Promise<void> {
   const employeeId = req.user!.employeeId;
@@ -96,7 +53,7 @@ export async function employeeDashboard(req: AuthRequest, res: Response): Promis
       data: {
         todayRecord,
         monthlySummary,
-        leaveBalances: mirrorEmergencyBalance(leaveBalances),
+        leaveBalances: await presentEmployeeLeaveBalances(employeeId, year, leaveBalances),
         pendingLeaves,
         overtimeCredit,
         pendingCorrections,

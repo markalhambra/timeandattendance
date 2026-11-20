@@ -6,6 +6,7 @@ import { LeaveBalance, LeaveRequest, LeaveType, Employee } from '../../types';
 import { format, parseISO, addMonths } from 'date-fns';
 import toast from 'react-hot-toast';
 import { LEAVE_TYPE_META, leaveTypeNotice } from '../../utils/leaveNotice';
+import { displayedLeaveCredit } from '../../utils/leaveCredits';
 
 const LEAVE_TYPE_ORDER: LeaveType[] = [
   'SICK',
@@ -153,13 +154,13 @@ export default function LeavePage() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {LEAVE_TYPES.filter((lt) => lt.value !== 'LWOP').map((lt) => {
           const bal = balanceMap.get(lt.value);
-          const avail = bal ? bal.totalDays - bal.usedDays - bal.pendingDays : 0;
+          const credit = displayedLeaveCredit(lt.value, bal, balanceMap.get('SICK'));
           return (
             <div key={lt.value} className="card p-4">
               <div className="text-xs text-gray-500 mb-1">{lt.label}</div>
-              <div className="text-2xl font-black">{avail.toFixed(1)}</div>
-              <div className="text-xs text-gray-400">of {bal?.totalDays ?? 0} days</div>
-              {bal?.pendingDays ? <div className="text-[10px] text-yellow-600 mt-1">{bal.pendingDays} pending</div> : null}
+              <div className="text-2xl font-black">{credit.available.toFixed(1)}</div>
+              <div className="text-xs text-gray-400">of {credit.total} days</div>
+              {credit.pending ? <div className="text-[10px] text-yellow-600 mt-1">{credit.pending} pending</div> : null}
             </div>
           );
         })}

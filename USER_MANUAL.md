@@ -143,6 +143,8 @@ Supported leave types:
 - Bereavement Leave
 - Special Leave for Women (RA 9170)
 
+Sick Leave is a 12-day pool. Emergency Leave can use at most 3 of those days per year and does not add extra days. Unused emergency days can still be filed as Sick Leave.
+
 Approval flow:
 1. Department Head review
 2. HR review
@@ -601,6 +603,8 @@ Supported leave types:
 - Paternity Leave
 - Bereavement Leave
 - Special Leave for Women (RA 9170)
+
+Sick Leave is a 12-day pool. Emergency Leave can use at most 3 of those days per year and does not add extra days. Unused emergency days can still be filed as Sick Leave.
 
 How to file leave:
 1. Go to Leave page.

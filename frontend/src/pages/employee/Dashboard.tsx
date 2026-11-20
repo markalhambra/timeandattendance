@@ -3,6 +3,7 @@ import api from '../../services/api';
 import ClockWidget from '../../components/attendance/ClockWidget';
 import { LeaveBalance, OvertimeRecord, AttendanceRecord } from '../../types';
 import { format, parseISO } from 'date-fns';
+import { displayedLeaveCredit } from '../../utils/leaveCredits';
 
 interface DashboardData {
   todayRecord: AttendanceRecord | null;
@@ -127,13 +128,15 @@ export default function EmployeeDashboard() {
           </div>
           <div className="space-y-3">
             {data?.leaveBalances?.length ? data.leaveBalances.map((b) => {
-              const available = b.totalDays - b.usedDays - b.pendingDays;
-              const pct = (available / b.totalDays) * 100;
+              const sick = data.leaveBalances.find((row) => row.leaveType === 'SICK');
+              const credit = displayedLeaveCredit(b.leaveType, b, sick);
+              const available = credit.available;
+              const pct = credit.total > 0 ? (available / credit.total) * 100 : 0;
               return (
                 <div key={b.id}>
                   <div className="flex justify-between text-sm mb-1">
                     <span className="font-medium">{leaveTypeLabels[b.leaveType] || b.leaveType}</span>
-                    <span className="font-bold">{available.toFixed(1)} / {b.totalDays} days</span>
+                    <span className="font-bold">{available.toFixed(1)} / {credit.total} days</span>
                   </div>
                   <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
                     <div className="h-full bg-black rounded-full transition-all" style={{ width: `${Math.max(0, pct)}%` }} />

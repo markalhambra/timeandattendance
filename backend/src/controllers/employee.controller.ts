@@ -16,6 +16,7 @@ import {
   syncDepartmentHeadRoleFromHeadships,
 } from '../utils/departmentHead';
 import { hasAnyRole, resolveUserRoles } from '../utils/roles';
+import { initialLeaveBalanceRows } from '../services/leaveBalance.service';
 
 export async function getMyProfile(req: AuthRequest, res: Response): Promise<void> {
   try {
@@ -153,20 +154,7 @@ export async function createEmployee(req: AuthRequest, res: Response): Promise<v
     const year = new Date().getFullYear();
     const empId = user.employee!.id;
     await prisma.leaveBalance.createMany({
-      data: [
-        { employeeId: empId, year, leaveType: 'SICK', totalDays: 10 },
-        { employeeId: empId, year, leaveType: 'VACATION', totalDays: 15 },
-        { employeeId: empId, year, leaveType: 'PML', totalDays: 7 },
-        { employeeId: empId, year, leaveType: 'SML', totalDays: 7 },
-        { employeeId: empId, year, leaveType: 'EMERGENCY', totalDays: 3 },
-        { employeeId: empId, year, leaveType: 'SOLO_PARENT', totalDays: 7 },
-        { employeeId: empId, year, leaveType: 'MATERNITY', totalDays: 105 },
-        { employeeId: empId, year, leaveType: 'PATERNITY', totalDays: 7 },
-        { employeeId: empId, year, leaveType: 'BEREAVEMENT', totalDays: 5 },
-        { employeeId: empId, year, leaveType: 'MAGNA_CARTA_WOMEN', totalDays: 60 },
-        { employeeId: empId, year, leaveType: 'CALAMITY', totalDays: 3 },
-        { employeeId: empId, year, leaveType: 'VAWC', totalDays: 10 },
-      ],
+      data: initialLeaveBalanceRows(empId, year),
     });
 
     // Strict tally: DH role → head of home department (demotes previous head if needed)
@@ -734,20 +722,7 @@ export async function importEmployees(req: AuthRequest, res: Response): Promise<
         const year = new Date().getFullYear();
         const empId = user.employee!.id;
         await prisma.leaveBalance.createMany({
-          data: [
-            { employeeId: empId, year, leaveType: 'SICK', totalDays: 10 },
-            { employeeId: empId, year, leaveType: 'VACATION', totalDays: 15 },
-            { employeeId: empId, year, leaveType: 'PML', totalDays: 7 },
-            { employeeId: empId, year, leaveType: 'SML', totalDays: 7 },
-            { employeeId: empId, year, leaveType: 'EMERGENCY', totalDays: 3 },
-            { employeeId: empId, year, leaveType: 'SOLO_PARENT', totalDays: 7 },
-            { employeeId: empId, year, leaveType: 'MATERNITY', totalDays: 105 },
-            { employeeId: empId, year, leaveType: 'PATERNITY', totalDays: 7 },
-            { employeeId: empId, year, leaveType: 'BEREAVEMENT', totalDays: 5 },
-            { employeeId: empId, year, leaveType: 'MAGNA_CARTA_WOMEN', totalDays: 60 },
-            { employeeId: empId, year, leaveType: 'CALAMITY', totalDays: 3 },
-            { employeeId: empId, year, leaveType: 'VAWC', totalDays: 10 },
-          ],
+          data: initialLeaveBalanceRows(empId, year),
         });
         if (resolvedImport.roles.includes('DEPARTMENT_HEAD') && departmentId) {
           await ensureHomeDepartmentHead(user.id, departmentId);
