@@ -1,4 +1,4 @@
-import { useState, memo } from 'react';
+import { useState, useMemo, memo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../services/api';
 import { Department, Employee } from '../../types';
@@ -65,6 +65,7 @@ export default function ReportsPage() {
   const [employeeFilter, setEmployeeFilter] = useState('');
   const [workTypeFilter, setWorkTypeFilter] = useState('');
   const [exporting, setExporting] = useState(false);
+  const [dateFiledOrder, setDateFiledOrder] = useState<'desc' | 'asc' | null>(null);
 
   const { data: depts } = useQuery<Department[]>({ queryKey: ['departments'], queryFn: () => api.get('/departments').then((r) => r.data.data) });
   const { data: employees } = useQuery<Employee[]>({
@@ -90,6 +91,16 @@ export default function ReportsPage() {
       return api.get(url).then((r) => r.data.data);
     },
   });
+
+  const summaryRows = useMemo(() => {
+    const rows: Record<string, unknown>[] = reportData?.summary ?? [];
+    if ((reportType !== 'leave' && reportType !== 'ot-credits') || !dateFiledOrder) return rows;
+    return [...rows].sort((a, b) => {
+      const left = String(a['Date Filed'] ?? '');
+      const right = String(b['Date Filed'] ?? '');
+      return dateFiledOrder === 'desc' ? right.localeCompare(left) : left.localeCompare(right);
+    });
+  }, [reportData, reportType, dateFiledOrder]);
 
   const reportTypes: { key: ReportType; label: string }[] = [
     { key: 'attendance', label: 'Attendance' },
@@ -118,9 +129,9 @@ export default function ReportsPage() {
         URL.revokeObjectURL(url);
       } else {
         // Export summary of current report as XLSX client-side
-        if (!reportData?.summary?.length) return;
+        if (!summaryRows.length) return;
         const wb = XLSX.utils.book_new();
-        const ws = XLSX.utils.json_to_sheet(reportData.summary);
+        const ws = XLSX.utils.json_to_sheet(summaryRows);
         const sheetName = reportType === 'ot-credits' ? 'OT Credits' : reportType.charAt(0).toUpperCase() + reportType.slice(1);
         XLSX.utils.book_append_sheet(wb, ws, sheetName);
         const fileName = reportType === 'ot-credits'
@@ -149,7 +160,7 @@ export default function ReportsPage() {
       <div className="flex gap-3 flex-wrap">
         <div className="flex gap-1 bg-gray-100 rounded-xl p-1">
           {reportTypes.map((t) => (
-            <button key={t.key} onClick={() => { setReportType(t.key); if (t.key !== 'attendance') setWorkTypeFilter(''); }} className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${reportType === t.key ? 'bg-white shadow-sm text-black' : 'text-gray-500 hover:text-black'}`}>
+            <button key={t.key} onClick={() => { setReportType(t.key); setDateFiledOrder(null); if (t.key !== 'attendance') setWorkTypeFilter(''); }} className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${reportType === t.key ? 'bg-white shadow-sm text-black' : 'text-gray-500 hover:text-black'}`}>
               {t.label}
             </button>
           ))}
@@ -191,19 +202,31 @@ export default function ReportsPage() {
       {reportData?.summary && (
         <div className="card overflow-hidden">
           <div className="px-5 py-4 border-b border-gray-100">
-            <h2 className="font-semibold text-sm">{reportType === 'ot-credits' ? 'Available OT Credits by Employee' : reportType === 'attendance' ? 'Daily Attendance' : 'Summary by Department'}</h2>
+            <h2 className="font-semibold text-sm">{reportType === 'ot-credits' ? 'Approved OT Credits and CTO/CDO' : reportType === 'attendance' ? 'Daily Attendance' : 'Summary by Department'}</h2>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-gray-50 border-b border-gray-100">
                 <tr>
-                  {Object.keys(reportData.summary[0] || {}).map((k) => (
-                    <th key={k} className="table-header">{k}</th>
+                  {Object.keys(summaryRows[0] || {}).map((k) => (
+                    <th key={k} className="table-header">
+                      {(reportType === 'leave' || reportType === 'ot-credits') && k === 'Date Filed' ? (
+                        <button
+                          type="button"
+                          onClick={() => setDateFiledOrder((current) => (current === 'desc' ? 'asc' : 'desc'))}
+                          className="inline-flex items-center gap-1 hover:text-black"
+                          aria-label={dateFiledOrder === 'desc' ? 'Sort date filed from oldest to latest' : 'Sort date filed from latest to oldest'}
+                        >
+                          {k}
+                          <span aria-hidden="true">{dateFiledOrder === 'desc' ? '↓' : dateFiledOrder === 'asc' ? '↑' : '↕'}</span>
+                        </button>
+                      ) : k}
+                    </th>
                   ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {reportData.summary.map((row: any, i: number) => (
+                {summaryRows.map((row: any, i: number) => (
                   <tr key={i} className="hover:bg-gray-50">
                     {Object.values(row).map((v: any, j: number) => (
                       <td key={j} className="table-cell text-sm">{v}</td>

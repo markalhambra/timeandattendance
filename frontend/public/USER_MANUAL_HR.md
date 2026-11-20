@@ -221,7 +221,7 @@ Generate and export data reports for management and compliance.
 | Leave | Daily approved leave counts by type |
 | Overtime | Daily approved overtime counts |
 | Absence | Attendance rate by employee and department |
-| OT Credits | Available overtime credits by employee/department |
+| OT Credits | Each approved overtime credit and each approved CTO/CDO conversion, not a per-employee total |
 
 **How to Generate a Report:**
 1. Click **Reports** in the sidebar.

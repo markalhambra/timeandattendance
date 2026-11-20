@@ -153,7 +153,7 @@ async function main() {
     ]) {
       const days =
         lt === LeaveType.VACATION ? 15
-        : lt === LeaveType.SICK ? 10
+        : lt === LeaveType.SICK ? 12
         : lt === LeaveType.PML ? 7
         : lt === LeaveType.SML ? 7
         : lt === LeaveType.EMERGENCY ? 3

@@ -25,6 +25,11 @@ export function phtMonth(): number {
   return new Date(Date.now() + PHT_OFFSET_MS).getUTCMonth() + 1;
 }
 
+/** Returns the Philippine calendar date of an instant as YYYY-MM-DD. */
+export function phtCalendarDate(date: Date): string {
+  return new Date(date.getTime() + PHT_OFFSET_MS).toISOString().slice(0, 10);
+}
+
 /**
  * Returns [monthStart, monthEnd] as UTC Dates for a PHT year and 1-indexed month.
  * e.g. phtMonthBounds(2026, 6) → [2026-06-01T00:00:00Z, 2026-06-30T00:00:00Z]

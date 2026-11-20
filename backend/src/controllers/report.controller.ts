@@ -3,7 +3,7 @@ import { AuthRequest } from '../middleware/auth.middleware';
 import { prisma } from '../config/database';
 import * as XLSX from 'xlsx';
 import { ApprovalStatus } from '@prisma/client';
-import { phtYear, phtMonth } from '../utils/timezone';
+import { phtCalendarDate, phtYear, phtMonth } from '../utils/timezone';
 import {
   buildDailyAttendanceRows,
   chartFromDailyRows,
@@ -92,6 +92,7 @@ export async function leaveReport(req: AuthRequest, res: Response): Promise<void
       Employee: `${l.employee.firstName} ${l.employee.lastName}`,
       Department: l.employee.department?.name ?? '—',
       'Leave Type': LEAVE_TYPE_LABEL[l.leaveType] || l.leaveType,
+      'Date Filed': phtCalendarDate(l.createdAt),
       'Start Date': l.startDate.toISOString().split('T')[0],
       'End Date': l.endDate.toISOString().split('T')[0],
       Days: l.totalDays,
@@ -225,11 +226,7 @@ export async function otCreditsReport(req: AuthRequest, res: Response): Promise<
 
   try {
     const now = new Date();
-    const where: any = {
-      status: ApprovalStatus.APPROVED,
-      isConverted: false,
-      approvedExpiry: { gt: now },
-    };
+    const where: any = { status: ApprovalStatus.APPROVED };
     if (employeeId) where.employeeId = employeeId;
     else if (departmentId) where.employee = { departmentId, isArchived: false };
     else where.employee = { isArchived: false };
@@ -243,52 +240,76 @@ export async function otCreditsReport(req: AuthRequest, res: Response): Promise<
             department: { select: { name: true } },
           },
         },
+        conversions: {
+          where: { status: ApprovalStatus.APPROVED },
+        },
       },
-      orderBy: [{ employee: { lastName: 'asc' } }, { approvedExpiry: 'asc' }],
     });
 
-    // chart: available OT hours per department
     const byDeptChart = new Map<string, number>();
+    const rows: Array<{
+      Employee: string;
+      'Emp No.': string;
+      Department: string;
+      Type: string;
+      'OT Date': string;
+      'Date Filed': string;
+      Hours: string;
+      Expiry: string;
+      'Scheduled Date': string;
+      Status: string;
+      filedAt: number;
+    }> = [];
+
     for (const r of records) {
-      const dept = r.employee.department?.name ?? 'Unknown';
-      byDeptChart.set(dept, (byDeptChart.get(dept) || 0) + r.minutes);
+      const name = `${r.employee.firstName} ${r.employee.lastName}`;
+      const empNo = r.employee.employeeNumber ?? '—';
+      const dept = r.employee.department?.name ?? '—';
+      const otDate = isoDate(r.date);
+      const fullyConverted = r.isConverted || r.minutes <= 0;
+      const expired = !r.approvedExpiry || r.approvedExpiry <= now;
+      if (!fullyConverted && !expired) {
+        byDeptChart.set(dept, (byDeptChart.get(dept) || 0) + r.minutes);
+      }
+
+      rows.push({
+        Employee: name,
+        'Emp No.': empNo,
+        Department: dept,
+        Type: 'OT Credit',
+        'OT Date': otDate,
+        'Date Filed': phtCalendarDate(r.createdAt),
+        Hours: (r.minutes / 60).toFixed(2),
+        Expiry: r.approvedExpiry ? phtCalendarDate(r.approvedExpiry) : '—',
+        'Scheduled Date': '—',
+        Status: fullyConverted ? 'Fully Converted' : expired ? 'Expired' : 'Available',
+        filedAt: r.createdAt.getTime(),
+      });
+
+      for (const conversion of r.conversions) {
+        rows.push({
+          Employee: name,
+          'Emp No.': empNo,
+          Department: dept,
+          Type: conversion.conversionType,
+          'OT Date': otDate,
+          'Date Filed': phtCalendarDate(conversion.createdAt),
+          Hours: (conversion.minutesToConvert / 60).toFixed(2),
+          Expiry: '—',
+          'Scheduled Date': conversion.scheduledDate ? isoDate(conversion.scheduledDate) : '—',
+          Status: 'Approved',
+          filedAt: conversion.createdAt.getTime(),
+        });
+      }
     }
+
     const chartData = Array.from(byDeptChart.entries())
       .map(([date, minutes]) => ({ date, count: parseFloat((minutes / 60).toFixed(2)) }))
       .sort((a, b) => b.count - a.count);
 
-    // summary: one row per employee, sorted by most available hours
-    const byEmp = new Map<string, {
-      name: string; empNo: string; dept: string;
-      records: number; totalMinutes: number; earliestExpiry: Date;
-    }>();
-    for (const r of records) {
-      if (!byEmp.has(r.employeeId)) {
-        byEmp.set(r.employeeId, {
-          name: `${r.employee.firstName} ${r.employee.lastName}`,
-          empNo: r.employee.employeeNumber ?? '—',
-          dept: r.employee.department?.name ?? '—',
-          records: 0,
-          totalMinutes: 0,
-          earliestExpiry: r.approvedExpiry!,
-        });
-      }
-      const e = byEmp.get(r.employeeId)!;
-      e.records++;
-      e.totalMinutes += r.minutes;
-      if (r.approvedExpiry && r.approvedExpiry < e.earliestExpiry) e.earliestExpiry = r.approvedExpiry;
-    }
-
-    const summary = Array.from(byEmp.values())
-      .sort((a, b) => b.totalMinutes - a.totalMinutes)
-      .map((e) => ({
-        Employee: e.name,
-        'Emp No.': e.empNo,
-        Department: e.dept,
-        'OT Records': e.records,
-        'Total OT Hours': (e.totalMinutes / 60).toFixed(2),
-        'Earliest Expiry': e.earliestExpiry.toISOString().split('T')[0],
-      }));
+    const summary = rows
+      .sort((a, b) => b.filedAt - a.filedAt)
+      .map(({ filedAt: _filedAt, ...row }) => row);
 
     res.json({ success: true, data: { chartData, summary } });
   } catch {
